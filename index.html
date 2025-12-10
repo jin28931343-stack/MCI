@@ -11,6 +11,35 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
+        /* 確保移動設備在豎屏時強制橫屏 (最簡化且通用) */
+    @media only screen and (max-device-width: 1024px) and (orientation: portrait) {
+        /* 使用 vh/vw 來確保旋轉後填滿整個視口 */
+        html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        body {
+            /* 隱藏內容，防止閃爍 */
+            visibility: hidden; 
+            width: 100vh;
+            height: 100vw;
+            overflow: hidden;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            /* 關鍵：旋轉整個 body/root 容器 */
+            transform: translate(-50%, -50%) rotate(90deg);
+            transform-origin: 50% 50%;
+            /* 讓旋轉後的內容可見 */
+            visibility: visible;
+        }
+        /* 修正 tailwind css 造成的 h-screen 影響 */
+        .flex.justify-center.items-center.h-screen {
+             height: 100% !important; 
+             width: 100% !important;
+        }
+    }
         body {
             margin: 0;
             padding: 0;
@@ -1996,4 +2025,5 @@
     </script>
 </body>
 </html>
+
 
