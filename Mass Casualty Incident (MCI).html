@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>災害應變 - 國道連環車禍 (React版)</title>
+    
+    <!-- 1. 引入 Tailwind CSS (解析 JSX 中的 class) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- 3. 引入 Babel (讓瀏覽器能看懂 JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- 4. 保留原本的 CSS 設定 (作為補充樣式) -->
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050505;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+        }
+        /* 讓 Canvas 保持像素風格 */
+        .image-pixelated {
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body>
+    <!-- React 的掛載點，React 會把內容產生在這裡 -->
+    <div id="root"></div>
+
+    <!-- 5. 你的 React 程式碼 (注意 type="text/babel") -->
+    <script type="text/babel">
+        // 由於沒有 build 工具，我們從全域變數解構 React hooks
+        const { useEffect, useRef, useState } = React;
+
+        // 簡單的圖標組件 (替代 lucide-react，避免 CDN import 問題)
+        const IconAlert = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        );
+        const IconMapPin = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+        );
+        const IconActivity = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        );
+
+        function App() {
+            const canvasRef = useRef(null);
+            const [survivorCount, setSurvivorCount] = useState(0);
+            const totalSurvivors = 4;
+
+            const gameState = useRef({
+                keys: { w: false, s: false, a: false, d: false },
+                player: {
+                x: 50, y: 0, width: 20, height: 30, speed: 3.5, dir: 3, frame: 0, moving: false, animTimer: 0, lightRadius: 150
+                },
+                obstacles: [], decorations: [], particles: [], survivors: [],
+                survivorsFoundCount: 0, animationFrameId: null
+            });
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const state = gameState.current;
+
+                const GAME_WIDTH = 960;
+                const GAME_HEIGHT = 540;
+                
+                const resize = () => {
+                    if (!canvas) return;
+                    let scale = Math.min(window.innerWidth / GAME_WIDTH, window.innerHeight / GAME_HEIGHT);
+                    canvas.style.width = `${GAME_WIDTH * scale}px`;
+                    canvas.style.height = `${GAME_HEIGHT * scale}px`;
+                };
+                
+                canvas.width = GAME_WIDTH;
+                canvas.height = GAME_HEIGHT;
+                window.addEventListener('resize', resize);
+                resize();
+
+                const PALETTE = {
+                    asphalt: '#2d3436', markingWhite: '#b2bec3', markingYellow: '#f1c40f', oil: '#000000', glass: '#81ecec',
+                    carColors: ['#e74c3c', '#3498db', '#ecf0f1', '#95a5a6', '#f39c12'],
+                    darkness: 'rgba(10, 10, 15, 0.92)', playerVest: '#3498db', playerReflect: '#f1c40f'
+                };
+
+                const rand = (min, max) => Math.random() * (max - min) + min;
+
+                if (state.obstacles.length === 0) {
+                    state.player.y = GAME_HEIGHT / 2;
+                    for(let i=0; i<10; i++) state.decorations.push({ type: 'skid', x: rand(100, GAME_WIDTH), y: rand(50, GAME_HEIGHT-50), w: rand(50, 150), h: rand(2, 4), angle: rand(-0.2, 0.2) });
+                    for(let i=0; i<8; i++) state.decorations.push({ type: 'oil', x: rand(100, GAME_WIDTH), y: rand(50, GAME_HEIGHT-50), r: rand(10, 30) });
+                    for(let i=0; i<50; i++) state.decorations.push({ type: 'glass', x: rand(0, GAME_WIDTH), y: rand(0, GAME_HEIGHT), size: rand(1, 3) });
+
+                    state.obstacles.push({x: 0, y: 0, w: GAME_WIDTH, h: 40, type: 'guardrail'});
+                    state.obstacles.push({x: 0, y: GAME_HEIGHT-40, w: GAME_WIDTH, h: 40, type: 'guardrail'});
+                    state.obstacles.push({x: -10, y: 0, w: 10, h: GAME_HEIGHT, type: 'wall'});
+                    state.obstacles.push({x: GAME_WIDTH, y: 0, w: 10, h: GAME_HEIGHT, type: 'wall'});
+
+                    const laneY = [100, 220, 340, 460];
+                    for(let i=0; i<12; i++) {
+                        let type = Math.random() > 0.8 ? 'truck' : 'sedan';
+                        let lane = Math.floor(Math.random() * 4);
+                        let x = rand(100, GAME_WIDTH - 100);
+                        let y = laneY[lane] + rand(-20, 20);
+                        let rotated = Math.random() > 0.3;
+                        let w = (type === 'sedan' ? (rotated?80:40) : (rotated?120:50));
+                        let h = (type === 'sedan' ? (rotated?40:80) : (rotated?50:120));
+                        let overlap = state.obstacles.some(o => x < o.x + o.w + 10 && x + w + 10 > o.x && y < o.y + o.h + 10 && y + h + 10 > o.y);
+                        if (!overlap) {
+                            state.obstacles.push({
+                                x, y, w, h, type, rotated,
+                                color: type === 'truck' ? '#fff' : PALETTE.carColors[Math.floor(Math.random() * PALETTE.carColors.length)],
+                                hitbox: { x: x+2, y: y+2, w: w-4, h: h-4 }
+                            });
+                        }
+                    }
+
+                    let cars = state.obstacles.filter(o => o.type !== 'guardrail' && o.type !== 'wall');
+                    for(let i=0; i<totalSurvivors; i++) {
+                        let car = cars[Math.floor(Math.random() * cars.length)];
+                        let sx = car ? car.x + rand(-30, car.w + 30) : rand(100, 800);
+                        let sy = car ? car.y + rand(-30, car.h + 30) : rand(100, 400);
+                        if (sx < 20) sx = 20; if (sx > GAME_WIDTH-20) sx = GAME_WIDTH-20;
+                        if (sy < 50) sy = 50; if (sy > GAME_HEIGHT-50) sy = GAME_HEIGHT-50;
+                        state.survivors.push({ x: sx, y: sy, found: false });
+                    }
+
+                    cars.forEach(car => {
+                        if (Math.random() > 0.5) {
+                            for(let k=0; k<5; k++) {
+                                state.particles.push({
+                                    x: car.x + car.w/2, y: car.y + car.h/2, vx: rand(-0.5, 0.5), vy: rand(-1, -0.2), life: rand(50, 150), size: rand(2, 6)
+                                });
+                            }
+                        }
+                    });
+                }
+
+                const handleKeyDown = (e) => {
+                    if(e.key === 'w' || e.key === 'ArrowUp') state.keys.w = true;
+                    if(e.key === 's' || e.key === 'ArrowDown') state.keys.s = true;
+                    if(e.key === 'a' || e.key === 'ArrowLeft') state.keys.a = true;
+                    if(e.key === 'd' || e.key === 'ArrowRight') state.keys.d = true;
+                };
+                const handleKeyUp = (e) => {
+                    if(e.key === 'w' || e.key === 'ArrowUp') state.keys.w = false;
+                    if(e.key === 's' || e.key === 'ArrowDown') state.keys.s = false;
+                    if(e.key === 'a' || e.key === 'ArrowLeft') state.keys.a = false;
+                    if(e.key === 'd' || e.key === 'ArrowRight') state.keys.d = false;
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                window.addEventListener('keyup', handleKeyUp);
+
+                const drawRect = (x, y, w, h, color) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); };
+
+                const update = () => {
+                    const p = state.player;
+                    p.moving = false;
+                    let nextX = p.x;
+                    let nextY = p.y;
+                    if (state.keys.w) { nextY -= p.speed; p.dir = 1; p.moving = true; }
+                    if (state.keys.s) { nextY += p.speed; p.dir = 0; p.moving = true; }
+                    if (state.keys.a) { nextX -= p.speed; p.dir = 2; p.moving = true; }
+                    if (state.keys.d) { nextX += p.speed; p.dir = 3; p.moving = true; }
+
+                    let pBox = { x: nextX - 5, y: nextY - 5, w: 10, h: 10 };
+                    let collide = false;
+                    for(let o of state.obstacles) {
+                        let obBox = o.type === 'guardrail' ? {x: o.x, y: o.y, w: o.w, h: o.h} : o.hitbox;
+                        if (!obBox) obBox = {x: o.x, y: o.y, w: o.w, h: o.h};
+                        if (pBox.x < obBox.x + obBox.w && pBox.x + pBox.w > obBox.x && pBox.y < obBox.y + obBox.h && pBox.y + pBox.h > obBox.y) {
+                            collide = true; break;
+                        }
+                    }
+                    if (!collide) { p.x = nextX; p.y = nextY; }
+                    if (p.moving) { p.animTimer++; p.frame = Math.floor(p.animTimer / 5); }
+
+                    state.particles.forEach(pt => {
+                        pt.x += pt.vx; pt.y += pt.vy; pt.life--; pt.size += 0.1;
+                        if(pt.life <= 0) {
+                            let car = state.obstacles[Math.floor(Math.random() * state.obstacles.length)];
+                            if(car && car.type !== 'guardrail' && car.type !== 'wall') {
+                                pt.x = car.x + car.w/2; pt.y = car.y + car.h/2; pt.life = rand(50, 150); pt.size = rand(2, 5);
+                            }
+                        }
+                    });
+
+                    state.survivors.forEach(s => {
+                        if(!s.found) {
+                            let d = Math.hypot(p.x - s.x, p.y - s.y);
+                            if(d < 30) {
+                                s.found = true; state.survivorsFoundCount++; setSurvivorCount(state.survivorsFoundCount);
+                            }
+                        }
+                    });
+                };
+
+                const draw = () => {
+                    drawRect(0, 0, GAME_WIDTH, GAME_HEIGHT, PALETTE.asphalt);
+                    ctx.fillStyle = PALETTE.markingWhite;
+                    const laneHeight = (GAME_HEIGHT - 80) / 4;
+                    for(let l=1; l<=3; l++) {
+                        let ly = 40 + l * laneHeight;
+                        for(let lx=0; lx<GAME_WIDTH; lx+=80) ctx.fillRect(lx, ly - 2, 40, 4);
+                    }
+                    ctx.fillStyle = PALETTE.markingYellow;
+                    ctx.fillRect(0, 40, GAME_WIDTH, 4);
+                    ctx.fillRect(0, GAME_HEIGHT - 44, GAME_WIDTH, 4);
+
+                    state.decorations.forEach(d => {
+                        if(d.type === 'skid') {
+                            ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.angle); drawRect(0, 0, d.w, d.h, 'rgba(0,0,0,0.6)'); ctx.restore();
+                        } else if (d.type === 'oil') {
+                            ctx.fillStyle = PALETTE.oil; ctx.beginPath(); ctx.ellipse(d.x, d.y, d.r, d.r*0.6, 0, 0, Math.PI*2); ctx.fill();
+                        } else if (d.type === 'glass') { drawRect(d.x, d.y, d.size, d.size, PALETTE.glass); }
+                    });
+
+                    const renderList = [];
+                    state.obstacles.forEach(o => renderList.push({type: 'obstacle', obj: o, y: o.y + o.h}));
+                    state.survivors.forEach(s => renderList.push({type: 'survivor', obj: s, y: s.y}));
+                    renderList.push({type: 'player', y: state.player.y});
+                    renderList.sort((a, b) => a.y - b.y);
+
+                    renderList.forEach(item => {
+                        if(item.type === 'obstacle') {
+                            let o = item.obj;
+                            if(o.type === 'guardrail') {
+                                drawRect(o.x, o.y, o.w, o.h, '#7f8c8d'); drawRect(o.x, o.y+5, o.w, 10, '#95a5a6'); 
+                                for(let gx=20; gx<GAME_WIDTH; gx+=100) drawRect(gx, o.y, 10, o.h, '#555');
+                            } else if(o.type !== 'wall') {
+                                drawRect(o.x+5, o.y+5, o.w, o.h, 'rgba(0,0,0,0.5)'); drawRect(o.x, o.y, o.w, o.h, o.color);
+                                ctx.fillStyle = '#2c3e50';
+                                let cabinW = o.rotated ? o.w*0.6 : o.w-4; let cabinH = o.rotated ? o.h-4 : o.h*0.5;
+                                let cabinX = o.rotated ? o.x + (o.w-cabinW)/2 : o.x+2; let cabinY = o.rotated ? o.y+2 : o.y+(o.h-cabinH)/2;
+                                drawRect(cabinX, cabinY, cabinW, cabinH, o.color);
+                                ctx.fillStyle = '#2c3e50';
+                                if(o.rotated) { drawRect(cabinX, cabinY, 4, cabinH); drawRect(cabinX+cabinW-4, cabinY, 4, cabinH); }
+                                else { drawRect(cabinX, cabinY, cabinW, 4); drawRect(cabinX, cabinY+cabinH-4, cabinW, 4); }
+                            }
+                        } else if (item.type === 'survivor') {
+                            let s = item.obj;
+                            if(!s.found) {
+                                ctx.fillStyle = '#95a5a6'; ctx.beginPath(); ctx.ellipse(s.x, s.y, 14, 6, Math.PI/3, 0, Math.PI*2); ctx.fill();
+                                ctx.fillStyle = 'rgba(192, 57, 43, 0.6)'; ctx.beginPath(); ctx.arc(s.x+5, s.y+5, 8, 0, Math.PI*2); ctx.fill();
+                                if(Math.floor(Date.now()/600)%2===0) { ctx.fillStyle='#fff'; ctx.font='12px Arial'; ctx.fillText('HELP', s.x-10, s.y-15); }
+                            }
+                        } else if (item.type === 'player') {
+                            let p = state.player; let px = p.x, py = p.y;
+                            let bob = (p.frame % 20 > 10) ? 1 : 0; let bodyY = py - 24 + bob;
+                            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.beginPath(); ctx.ellipse(px, py, 10, 5, 0, 0, Math.PI*2); ctx.fill();
+                            ctx.fillStyle = '#1a253a';
+                            let stride = p.moving ? ((p.frame%20>10)?3:-3) : 0;
+                            drawRect(px-5+stride, py-12, 4, 12); drawRect(px+1-stride, py-12, 4, 12);
+                            drawRect(px-7, bodyY, 14, 16, '#eee'); drawRect(px-7, bodyY+2, 14, 12, PALETTE.playerVest);
+                            drawRect(px-7, bodyY+6, 14, 3, PALETTE.playerReflect);
+                            drawRect(px-6, bodyY-14, 12, 14, '#f5cba7'); drawRect(px-6, bodyY-16, 12, 4, '#333');
+                            if(p.dir===2 || p.dir===3) { drawRect(p.dir===3?px+6:px-10, bodyY+8, 8, 4, '#111'); }
+                        }
+                    });
+
+                    ctx.fillStyle = 'rgba(150, 150, 150, 0.3)';
+                    state.particles.forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI*2); ctx.fill(); });
+
+                    ctx.save();
+                    ctx.fillStyle = PALETTE.darkness;
+                    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+                    let time = Date.now();
+                    let policeAlpha = (Math.sin(time / 200) + 1) / 2 * 0.15;
+                    ctx.fillStyle = `rgba(0, 0, 255, ${policeAlpha})`; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+                    if (Math.sin(time / 200 + Math.PI) > 0) { ctx.fillStyle = `rgba(255, 0, 0, ${policeAlpha})`; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT); }
+
+                    ctx.globalCompositeOperation = 'destination-out';
+                    const flicker = Math.random() * 3;
+                    const radius = state.player.lightRadius + flicker;
+                    const gradient = ctx.createRadialGradient(state.player.x, state.player.y - 10, radius * 0.1, state.player.x, state.player.y - 10, radius);
+                    gradient.addColorStop(0, 'rgba(0,0,0,1)'); gradient.addColorStop(0.6, 'rgba(0,0,0,0.5)'); gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath(); ctx.arc(state.player.x, state.player.y - 10, radius, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.moveTo(state.player.x, state.player.y - 15);
+                    let angle = 0;
+                    if(state.player.dir===0) angle = Math.PI/2;
+                    if(state.player.dir===1) angle = -Math.PI/2;
+                    if(state.player.dir===2) angle = Math.PI;
+                    if(state.player.dir===3) angle = 0;
+                    ctx.arc(state.player.x, state.player.y - 15, radius * 1.4, angle - 0.4, angle + 0.4);
+                    ctx.lineTo(state.player.x, state.player.y - 15);
+                    ctx.fill();
+                    ctx.restore();
+                };
+
+                const loop = () => {
+                    update();
+                    draw();
+                    state.animationFrameId = requestAnimationFrame(loop);
+                };
+                loop();
+
+                return () => {
+                    window.removeEventListener('resize', resize);
+                    window.removeEventListener('keydown', handleKeyDown);
+                    window.removeEventListener('keyup', handleKeyUp);
+                    cancelAnimationFrame(state.animationFrameId);
+                };
+            }, []);
+
+            return (
+                <div className="flex justify-center items-center h-screen bg-[#050505] text-white overflow-hidden font-mono relative">
+                <div className="relative shadow-[0_0_50px_rgba(0,0,20,0.5)] border-2 border-[#333] bg-[#111]">
+                    <canvas ref={canvasRef} className="block image-pixelated" />
+                    <div className="absolute top-5 left-5 pointer-events-none mix-blend-normal">
+                    <div className="inline-block bg-black/50 p-2 mb-2 backdrop-blur-sm">
+                        <h1 className="text-xl m-0 text-[#e74c3c] drop-shadow-[2px_2px_0_#000] tracking-widest font-bold flex items-center gap-2">
+                        <IconAlert /> INCIDENT: HIGHWAY PILE-UP
+                        </h1>
+                    </div>
+                    <div className="mt-2 bg-black/80 p-3 border-l-4 border-orange-500 text-gray-100 text-sm max-w-[300px] shadow-lg backdrop-blur-md">
+                        <div className="flex items-center gap-2 mb-1">
+                        <IconMapPin /> <span>地點: 國道一號 35KM 處</span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                        <IconActivity /> <span>任務: 檢傷分類與搜尋 ({survivorCount}/{totalSurvivors})</span>
+                        </div>
+                        <div className="text-xs text-gray-400 border-t border-gray-700 pt-2 mt-1">
+                        注意: 地面油漬濕滑 | 小心銳利碎片
+                        </div>
+                    </div>
+                    </div>
+                </div>
+                <div className="absolute bottom-5 text-gray-500 text-xs">
+                    WASD 移動 | 瀏覽器縮放以適應螢幕
+                </div>
+                </div>
+            );
+        }
+
+        // 6. 關鍵：啟動 React 渲染
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
