@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>災害應變 - 國道連環車禍 (擴張場景版)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -62,6 +62,7 @@
         .animate-blink {
             animation: blink 1s infinite;
         }
+        
     </style>
 </head>
 <body>
@@ -80,6 +81,17 @@
             const [selectedSlot, setSelectedSlot] = useState(0);
             const [gameOver, setGameOver] = useState(false);
             const [showMatSelector, setShowMatSelector] = useState(false);
+            // --- 新增狀態追蹤各類別已安置人數 ---
+             // ★★★ 新增：控制平板 UI 顯示的狀態 ★★★
+            const [showTabletUI, setShowTabletUI] = useState(false);
+             // ★★★ 新增：目前在平板介面中選中的傷患 ★★★
+            const [selectedPatient, setSelectedPatient] = useState(null);
+            const [triageCounts, setTriageCounts] = useState({
+                green: 0,
+                yellow: 0,
+                red: 0,
+                black: 0,
+            });
             
             const [playerStatsUI, setPlayerStatsUI] = useState({
                 hp: 100, maxHp: 100,
@@ -138,11 +150,39 @@
             ];
 
             const handleSlotClick = (index) => {
+                if (selectedSlot === index) {
+                    // 如果點擊的是當前選中的欄位，則取消選中
+                    setSelectedSlot(-1);
+                    setShowMatSelector(false);
+                     // ★★★ 新增：取消選中時關閉平板 ★★★
+                    setShowTabletUI(false);
+                     setSelectedPatient(null); // 清除選中傷患
+                    gameState.current.placementMode.active = false;
+                    // 如果是無線電，也取消無線電選單
+                    if (gameState.current.interactionMenu.mode === 'radio') {
+                        gameState.current.interactionMenu.active = false;
+                        gameState.current.interactionMenu.mode = 'main';
+                    }
+                    return;
+                }
                 setSelectedSlot(index);
                 const item = items[index];
-                
+                // --- 移除 MP 檢查：點擊道具時不再檢查 MP ---
+                // if (item.type === 'radio' && gameState.current.stats.mp < 10) {
+                //      addFeedback(gameState.current.player.x, gameState.current.player.y - 50, "MP不足!", "#e74c3c");
+                //      setSelectedSlot(-1); // 取消選擇
+                //      return; 
+                // }
+                // ★★★ 新增：切換道具時先關閉其他 UI ★★★
+                setShowMatSelector(false);
+                setShowTabletUI(false); 
+                gameState.current.placementMode.active = false;
+                gameState.current.interactionMenu.active = false; // 切換道具時關閉互動選單
                 if (item.type === "mat") {
                     setShowMatSelector(true);
+                    } else if (item.type === 'tablet') {
+                    // ★★★ 新增：如果是平板，開啟 UI ★★★
+                    setShowTabletUI(true);
                 } else if (['command_post', 'ambulance_staging', 'decon'].includes(item.type)) {
                     setShowMatSelector(false);
                     // 設定特殊區塊的放置模式
@@ -154,9 +194,23 @@
                         valid: false,
                         x: 0, y: 0
                     };
-                } else {
+                    
+                } else if (item.type === 'radio') {
+                    // --- 無線電邏輯 ---
                     setShowMatSelector(false);
                     gameState.current.placementMode.active = false; 
+                      // 1. 移除扣除 MP 邏輯：只開選單
+                    // gameState.current.stats.mp = Math.max(0, gameState.current.stats.mp - 10);
+                    // addFeedback(gameState.current.player.x, gameState.current.player.y - 70, "-10 MP (無線電)", "#3498db");
+
+                    // 2. 顯示無線電選單 (鎖定在角色身上)
+                    gameState.current.interactionMenu = {
+                        active: true,
+                        x: gameState.current.player.x, // 選單位置鎖定在玩家頭上
+                        y: gameState.current.player.y,
+                        target: gameState.current.player, // 讓選單跟著玩家移動
+                        mode: 'radio' // 新增無線電模式
+                    };
                 }
             };
 
@@ -171,11 +225,11 @@
                     x: 0, y: 0
                 };
             };
-
+            
             const handleRestart = () => {
                 setGameOver(false);
             };
-
+            
             const generateSurvivorData = () => {
                 const sex = Math.random() > 0.5 ? '男' : '女';
                 const age = Math.floor(Math.random() * (70 - 12 + 1)) + 12;
@@ -255,7 +309,16 @@
                 setSurvivorCount(0);
                 setPlayerStatsUI({...state.stats});
                 setShowMatSelector(false); 
-
+                const checkTriageCounts = () => {
+                    const counts = { green: 0, yellow: 0, red: 0, black: 0 };
+                    state.survivors.forEach(s => {
+                        // 計算已抵達對應區域的傷患
+                        if (s.hasArrived && s.triageTag) {
+                            counts[s.triageTag] = counts[s.triageTag] + 1;
+                        }
+                    });
+                    setTriageCounts(counts);
+                };
                 const resize = () => {
                     if (!canvas) return;
                     let scale = Math.min(window.innerWidth / GAME_WIDTH, window.innerHeight / GAME_HEIGHT);
@@ -293,7 +356,12 @@
                 };
 
                 state.emergencyVehicles.push(firetruckData); 
-                state.emergencyVehicles.push({ type: 'ambulance', x: 80 + LEFT_EXPANSION, y: WORLD_HEIGHT/2 + 100, w: 100, h: 50, angle: -0.2 }); 
+                // ★★★ 修改：初始救護車加入 passengers 與 ID ★★★
+                state.emergencyVehicles.push({ 
+                    id: Math.random(), type: 'ambulance', passengers: [], state: 'waiting', 
+                    x: 80 + LEFT_EXPANSION, y: WORLD_HEIGHT/2 + 100, w: 100, h: 50, angle: -0.2 
+                }); 
+                
                 state.emergencyVehicles.push({ type: 'police', x: 30 + LEFT_EXPANSION, y: WORLD_HEIGHT/2 + 200, w: 80, h: 40, angle: 0.1 }); 
 
                 // 阻擋方塊 (加上偏移)
@@ -440,16 +508,24 @@
                         }
                     }
 
-                    // 生成傷患數據並加入陣列
-                    const data = generateSurvivorData();
-                    state.survivors.push({ 
-                        x: sx, y: sy, found: false, triageTag: null, treatments: [], data: data,
-                        tourniquetTimer: data.isBleeding ? 60 : null, isDead: false, isEvacuating: false, isBeingCarried: false, trappedInVehicle: inCar ? car : null 
-                    });
+                 // 生成傷患數據並加入陣列
+                const data = generateSurvivorData();
+                state.survivors.push({ 
+                 x: sx, y: sy, found: false, triageTag: null, treatments: [], data: data,
+                 // ★★★ 新增：onAmbulance 狀態，標記是否已上車 ★★★
+                 tourniquetTimer: data.isBleeding ? 60 : null, isDead: false, isEvacuating: false, isBeingCarried: false, onAmbulance: false, trappedInVehicle: inCar ? car : null 
+                        });
                 }
                 // --- 新增：取消功能的共用邏輯 ---
                 const cancelAction = () => {
-                    let performed = false;
+                let performed = false;
+                // ★★★ 新增：按 C 或右鍵時關閉平板 ★★★
+                if (showTabletUI) {
+                    setShowTabletUI(false);
+                    setSelectedPatient(null);
+                    setSelectedSlot(-1);
+                    performed = true;
+                }
                     // 1. 取消放置模式
                     if (state.placementMode.active) {
                         state.placementMode.active = false;
@@ -485,8 +561,31 @@
                         cancelAction();}
                    // --- 新增：按下 E 鍵放置地墊 ---
                   if (e.key === 'e' || e.key === 'E') {
-                   if (state.placementMode.active) {
-                  if (state.placementMode.valid) {
+                      // 創建一個模擬的事件物件，將玩家的中心座標作為點擊座標
+                    const playerX = state.player.x;
+                    const playerY = state.player.y;
+                    // handleCanvasClick 期望接收螢幕座標 (e.clientX/Y)
+                    // 由於我們在這裡使用世界座標 (playerX/Y)，我們需要計算它在螢幕上的位置
+                    const clickX = playerX - state.camera.x;
+                    const clickY = playerY - state.camera.y;
+                     const mockEvent = {
+                        // 注意：這裡使用 getBoundingClientRect() 進行模擬可能複雜
+                        // 最簡單的方法是直接在 handleCanvasClick 內部使用 World 座標
+                        // 但為了程式碼一致性，我們需要找到 canvas 元素並模擬 clientX/Y
+                        // 這裡採用一個更安全且常見的模式：
+                        // 暫時修改 handleCanvasClick 讓它接受 World 座標，或者
+                        // 直接計算出能讓 handleCanvasClick 處理 World 座標的模擬 clientX/Y
+                        
+                        // 假設 canvas 寬度和位置已知，這是一個簡化的模擬方法
+                        // 我們知道 clickX/Y 是相對於 canvas 左上角的螢幕座標 (已包含鏡頭偏移)
+                        clientX: clickX + canvasRef.current.getBoundingClientRect().left,
+                        clientY: clickY + canvasRef.current.getBoundingClientRect().top,
+                        // 避免預設行為
+                        preventDefault: () => {}
+                    };
+                    
+                if (state.placementMode.active) {
+                if (state.placementMode.valid) {
                 state.triageMats.push({
                     x: state.placementMode.x,
                     y: state.placementMode.y,
@@ -499,8 +598,11 @@
                 } else {
                 // 若位置不合法，顯示提示 (使用玩家位置作為提示點)
                 addFeedback(state.player.x, state.player.y - 50, "無法放置", "#e74c3c");
+                
             }
         }
+        // 呼叫滑鼠點擊處理函數
+                handleCanvasClick(mockEvent);
     } 
                 };
 
@@ -602,6 +704,8 @@
                                                 addFeedback(menu.x, menu.y - 20, "傷勢過重無法移動", "#e74c3c");
                                             }
                                         }
+                                        // 檢傷完成後立即檢查計數
+                                        checkTriageCounts();
                                     }
                                     menu.active = false; menu.mode = 'main'; return;
                                 }
@@ -672,9 +776,104 @@
                                 menu.active = false; menu.mode = 'main'; return;
                             }
                         }
-                        menu.active = false; menu.target = null; menu.mode = 'main'; return;
-                    }
+                         // --- 新增：無線電選單處理 (在 interactionMenu.active 內) ---
+                    else if (menu.mode === 'radio') {
+                         const radioX = menu.x - 50; 
+                         const radioY = menu.y - 120;
+                         const menuW = 100;
+                         const menuH = 100;
+                         const btnH = 25;
+                         const gap = 5;
+                         const btnW = menuW - 10;
+                         const startX = radioX + 5;
+                        const startY = radioY + gap;
+                         // 繪製背景 (為了判斷點擊範圍)
+                         // drawRoundedRect(mx, my, 100, 100, 5, 'rgba(0,0,0,0.85)');
+                         // ctx.strokeStyle = '#3498db'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, 100, 100);
+                        
+                        // 1. 請求救護車 (扣 MP 10)
+                        if (clickX >= startX && clickX <= startX + btnW && clickY >= startY && clickY <= startY + btnH) {
+                            const stagingArea = state.triageMats.find(m => m.color === 'ambulance_staging');
+                             if (!stagingArea) {
+                                // 若未設置，顯示提示並不扣 MP
+                                addFeedback(menu.x, menu.y, "無設置救護車待命區", "#e74c3c");
+                            } else {
+                            if (state.stats.mp >= 10) {
+                                state.stats.mp = Math.max(0, state.stats.mp - 10);
+                                 // 隨機產生 1~3 台救護車
+                                    const ambCount = Math.floor(Math.random() * 3) + 1;
+                                    for (let k = 0; k < ambCount; k++) {
+                                        // 在待命區範圍內隨機生成位置 (稍微保留邊距)
+                                        const ax = stagingArea.x + 10 + Math.random() * (stagingArea.w - 90); 
+                                        const ay = stagingArea.y + 10 + Math.random() * (stagingArea.h - 60);
+                                        const aw = 80;
+                                        const ah = 40;
+                                        // 加入視覺物件
+                                        // ★★★ 修改：無線電生成的救護車加入 passengers 與 ID ★★★
+                                        state.emergencyVehicles.push({ 
+                                            id: Math.random(),
+                                            type: 'ambulance', 
+                                            passengers: [],
+                                            state: 'waiting',
+                                            x: ax, 
+                                            y: ay, 
+                                            w: aw, 
+                                            h: ah, 
+                                            angle: (Math.random() - 0.5) * 0.5 // 隨機微小角度
+                                            });
+                                    
 
+                                        // 加入阻擋判定 (讓玩家不能穿過新生成的車)
+                                        state.obstacles.push({
+                                            x: ax, 
+                                            y: ay, 
+                                            w: aw, 
+                                            h: ah, 
+                                            type: 'vehicle_block'
+                                        });
+                                    }  
+                                addFeedback(menu.x, menu.y - 70, "-10 MP (救護車)", "#3498db");
+                                addFeedback(menu.x, menu.y, "請求救護車 (待命區)", "#3498db");
+                            } else {
+                                addFeedback(menu.x, menu.y, "MP不足!", "#e74c3c");
+                            }
+                            }
+                            menu.active = false; menu.mode = 'main'; return;
+                        }
+                        // 2. 請求消防車 (扣 MP 10)
+                        if (clickX >= startX && clickX <= startX + btnW && clickY >= startY + btnH + gap && clickY <= startY + btnH * 2 + gap) {
+                            if (state.stats.mp >= 10) {
+                                state.stats.mp = Math.max(0, state.stats.mp - 10);
+                                addFeedback(menu.x, menu.y - 70, "-10 MP (消防車)", "#3498db");
+                                addFeedback(menu.x, menu.y, "請求消防車 (滅火)", "#e74c3c");
+                            } else {
+                                addFeedback(menu.x, menu.y, "MP不足!", "#e74c3c");
+                            }
+                            menu.active = false; menu.mode = 'main'; return;
+                        }
+                        // 3. 請求破壞小組 (扣 MP 10)
+                        if (clickX >= startX && clickX <= startX + btnW && clickY >= startY + btnH * 2 + gap * 2 && clickY <= startY + btnH * 3 + gap * 2) {
+                            if (state.stats.mp >= 10) {
+                                state.stats.mp = Math.max(0, state.stats.mp - 10);
+                                addFeedback(menu.x, menu.y - 70, "-10 MP (破壞小組)", "#3498db");
+                                addFeedback(menu.x, menu.y, "請求破壞小組", "#e67e22");
+                            } else {
+                                addFeedback(menu.x, menu.y, "MP不足!", "#e74c3c");
+                            }
+                            menu.active = false; menu.mode = 'main'; return;
+                        }
+                        
+                         // 如果點擊了選單以外的地方，取消選單 (檢查範圍是 100x100 的選單區域)
+                        if (menu.target === state.player && (clickX < menuX || clickX > menuX + 100 || clickY < menuY || clickY > menuY + 100)) {
+                             menu.active = false; menu.mode = 'main'; return;
+                        }
+                    }
+                        // 如果點擊了選單邊界外，關閉選單 (這行放在所有 menu.mode 檢查之後)
+                        menu.active = false; menu.target = null; menu.mode = 'main'; return;
+                  
+                        
+                    }
+                    
                     const interactRadius = 60;
                     let clickedSomething = false;
 
@@ -886,7 +1085,12 @@
                     // 修改: 若是治療選單，縮短連線以配合向上移動的選單
                     let lineBottom = my + 45;
                     if (menu.mode === 'treatment') lineBottom = my + 15;
-
+                    else if (menu.mode === 'radio') { 
+                         // 在 radio 模式中，我們將選單向上移動更多 (在下面定義的 radioY)
+                         // 但連線的目標點仍然是選單的底部邊緣，即 radioY + menuH (約 -20)
+                         // 這裡讓連線畫到比 my 更高的位置 (my - 60 = menu.y - 120)
+                         lineBottom = my - 60; 
+                    }
                     ctx.beginPath(); ctx.moveTo(menu.x, menu.y - 10); ctx.lineTo(menu.x, lineBottom); ctx.stroke();
 
                     if (menu.mode === 'main') {
@@ -999,6 +1203,39 @@
                         ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(mx - 10, my, 100, 40);
                         ctx.fillStyle = '#e67e22'; ctx.fillRect(mx - 5, my + 5, 90, 30);
                         ctx.fillStyle = 'white'; ctx.font = '12px Arial'; ctx.fillText("破壞車體", mx + 15, my + 25);
+                         // 【修改】無線電選單繪製邏輯
+                     } else if (menu.mode === 'radio') {
+                         // 選單畫在玩家頭上 (menu.x, menu.y - 60)
+                         // 這裡的 radioX/Y 必須與 handleCanvasClick 中的定義一致
+                         const radioX = menu.x - 50; // 往左移 50px
+                         const radioY = menu.y - 120; // 往上移更多 (menu.y - 60 剛好是 my，所以這裡設定 -120 讓它高出 mx/my 60px)
+                         const menuW = 100;
+                         const menuH = 100;
+                         const btnH = 25;
+                         const gap = 5;
+                         const btnW = menuW - 10;
+                    
+                         // 繪製背景
+                         drawRoundedRect(radioX, radioY, menuW, menuH, 5, 'rgba(0,0,0,0.85)');
+                         ctx.strokeStyle = '#3498db'; ctx.lineWidth = 2; ctx.strokeRect(radioX, radioY, menuW, menuH);
+                         
+                         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                         ctx.font = 'bold 12px "Segoe UI"';
+
+                         // 1. 請求救護車按鈕 (藍色)
+                         const btn1Y = radioY + gap;
+                         ctx.fillStyle = '#3498db'; ctx.fillRect(radioX + 5, btn1Y, btnW, btnH);
+                         ctx.fillStyle = 'white'; ctx.fillText("請求救護車", radioX + menuW/2, btn1Y + btnH/2);
+                         
+                         // 2. 請求消防車按鈕 (紅色)
+                         const btn2Y = btn1Y + btnH + gap;
+                         ctx.fillStyle = '#e74c3c'; ctx.fillRect(radioX + 5, btn2Y, btnW, btnH);
+                         ctx.fillStyle = 'white'; ctx.fillText("請求消防車", radioX + menuW/2, btn2Y + btnH/2);
+                         
+                         // 3. 請求破壞小組按鈕 (橘色)
+                         const btn3Y = btn2Y + btnH + gap;
+                         ctx.fillStyle = '#e67e22'; ctx.fillRect(radioX + 5, btn3Y, btnW, btnH);
+                         ctx.fillStyle = 'white'; ctx.fillText("請求破壞小組", radioX + menuW/2, btn3Y + btnH/2);
                     }
                 };
 
@@ -1201,6 +1438,14 @@
                         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                         const labels = { 'green': '輕傷區', 'yellow': '中傷區', 'red': '重傷區', 'black': '臨時停屍間','command_post': '指揮站', 'ambulance_staging': '救護車待命區', 'decon': '除汙區' };
                         ctx.fillText(labels[m.color], m.x + m.w/2, m.y + m.h/2);
+                        // 如果是指揮站，額外繪製一個恢復圖示 (例如 +HP)
+                        if (m.color === 'command_post') {
+                            const blink = Math.sin(state.frameCount * 0.1) * 3;
+                            ctx.fillStyle = '#2ecc71'; // 綠色
+                            ctx.font = 'bold 20px Arial';
+                            ctx.fillText('+', m.x + m.w/2 - 10, m.y + m.h/2 + 30 + blink);
+                            ctx.fillText('HP', m.x + m.w/2 + 5, m.y + m.h/2 + 30 + blink);
+                        }
                         ctx.restore();
                     });
                 };
@@ -1350,6 +1595,13 @@
 
                     if (state.interactionMenu.active && state.interactionMenu.target) {
                         const target = state.interactionMenu.target;
+                        // --- 確保無線電選單 (target 為玩家) 跟隨玩家移動 ---
+                        if (target === p && state.interactionMenu.mode === 'radio') {
+                            state.interactionMenu.x = p.x;
+                            state.interactionMenu.y = p.y;
+                            // 如果是無線電選單，它會一直跟隨玩家，不需進行距離檢查來關閉
+                            return; 
+                        }
                         let targetX = target.x;
                         let targetY = target.y;
                         if (target.w) { targetX += target.w / 2; targetY += target.h / 2; }
@@ -1529,7 +1781,8 @@
                                 // NPC 重置狀態去搜尋下一個
                                 group.target = null;
                                 group.carrying = false;
-                                group.state = 'searching'; 
+                                group.state = 'searching';
+                                 checkTriageCounts(); // 搬運完成後檢查計數 
                             } else {
                                 group.leaderX += (dx / dist) * speed;
                                 group.leaderY += (dy / dist) * speed;
@@ -1574,13 +1827,27 @@
                                 s.isEvacuating = false;
                                 s.hasArrived = true; // 標記已抵達
                                 addFeedback(s.x, s.y, "抵達待命區", "#2ecc71");
+                                checkTriageCounts(); // 自行移動抵達後檢查計數
                             } else {
                                 s.x += (dx / dist) * 0.8; // 輕傷移動速度
                                 s.y += (dy / dist) * 0.8;
                             }
                         }
                     }
-
+                     // --- 新增：處理救護車離開邏輯 (在 update 迴圈內) ---
+                    for (let i = state.emergencyVehicles.length - 1; i >= 0; i--) {
+                        let v = state.emergencyVehicles[i];
+                        if (v.type === 'ambulance' && v.state === 'departing') {
+                            v.x -= 5; // 向左快速移動
+                            if (v.x < -200) {
+                                // 離開畫面後移除
+                                state.emergencyVehicles.splice(i, 1);
+                                // 同時移除對應的阻擋塊 (如果有)
+                                const blockIndex = state.obstacles.findIndex(o => o.type === 'vehicle_block' && Math.abs(o.x - v.x) < 20 && Math.abs(o.y - v.y) < 20);
+                                if (blockIndex > -1) state.obstacles.splice(blockIndex, 1);
+                            }
+                        }
+                    }
                     state.survivors.forEach(s => {
                         if (s.tourniquetTimer !== null && s.tourniquetTimer > 0) {
                             s.tourniquetTimer -= 1/240; 
@@ -1594,6 +1861,7 @@
                                 s.data.injuryText = '失血過多死亡';
                                 s.data.severity = 'black';
                                 addFeedback(s.x, s.y, "傷患死亡", "#000");
+                                checkTriageCounts(); // 傷患死亡轉黑卡後檢查計數
                             }
                         }
                     });
@@ -1607,7 +1875,31 @@
                     } else {
                         state.stats.sp = Math.min(state.stats.maxSp, state.stats.sp + 0.1);
                     }
+                    // ====== 新增：指揮站 HP 恢復邏輯 ======
+                    let isInCommandPost = false;
+                    const commandPost = state.triageMats.find(m => m.color === 'command_post');
+                     if (commandPost) {
+                        // 檢查玩家是否在指揮站區域內
+                        if (p.x > commandPost.x && p.x < commandPost.x + commandPost.w && 
+                            p.y > commandPost.y && p.y < commandPost.y + commandPost.h) {
+                            isInCommandPost = true;
+                        }
+                    }
+                    if (isInCommandPost) {
+                        // 每 30 幀 (約 0.5 秒) 恢復一次 HP，每次恢復 1 點
+                        if (state.frameCount % 30 === 0) {
+                            const newHp = Math.min(state.stats.maxHp, state.stats.hp + 1);
+                            if (newHp > state.stats.hp) {
+                                state.stats.hp = newHp;
+                                addFeedback(p.x, p.y - 60, "+1 HP (指揮站)", "#2ecc71");
+                            }
+                        }
+                        // 並且加速恢復 SP (耐力)
+                        state.stats.sp = Math.min(state.stats.maxSp, state.stats.sp + 0.5);
+                    }
+                    // ========================================
 
+                    if (state.keys.w) { nextY -= speed; p.dir = 1; p.moving = true; }
                     if (state.keys.w) { nextY -= speed; p.dir = 1; p.moving = true; }
                     if (state.keys.s) { nextY += speed; p.dir = 0; p.moving = true; }
                     if (state.keys.a) { nextX -= speed; p.dir = 2; p.moving = true; }
@@ -1706,6 +1998,7 @@
 
                     if (state.frameCount % 10 === 0) {
                         setPlayerStatsUI({...state.stats});
+                        // checkTriageCounts() // 已經在狀態改變時呼叫，這裡可以省略以減少不必要的渲染
                     }
                 };
 
@@ -1781,7 +2074,8 @@
                             if (carrierGroup) isLifted = true;
                         }
 
-                        if (!isLifted || s.isEvacuating) { 
+                        // ★★★ 修改：如果已經上救護車 (onAmbulance)，就不再繪製 ★★★
+                        if ((!isLifted || s.isEvacuating) && !s.onAmbulance) { 
                             renderList.push({type: 'survivor', obj: s, y: s.y})
                         }
                     });
@@ -1918,10 +2212,151 @@
                             </button>
                         </div>
                     )}
+                    {/* ★★★ 新增：檢傷平板浮動視窗 (靠右顯示) ★★★ */}
+                    {showTabletUI && (
+                        <>
+                        {/* 左側：救護車調度列表 */}
+                        <div className="absolute top-16 left-4 w-72 bg-slate-900/95 border-2 border-blue-500 rounded-lg shadow-[0_0_30px_rgba(59,130,246,0.3)] p-4 text-white z-50 max-h-[80vh] overflow-y-auto font-sans animate-fade-in custom-scrollbar">
+                            <div className="flex justify-between items-center mb-4 border-b border-blue-500/50 pb-2">
+                                <h2 className="text-lg font-bold text-blue-400 flex items-center gap-2">
+                                    🚑 救護車調度
+                                </h2>
+                            </div>
+                            <div className="space-y-3">
+                                {(() => {
+                                    const staging = gameState.current.triageMats.find(m => m.color === 'ambulance_staging');
+                                    let ambulances = [];
+                                    if (staging) {
+                                        ambulances = gameState.current.emergencyVehicles.filter(v => 
+                                            v.type === 'ambulance' && v.state !== 'departing' &&
+                                            v.x >= staging.x && v.x <= staging.x + staging.w &&
+                                            v.y >= staging.y && v.y <= staging.y + staging.h
+                                        );
+                                    } else {
+                                        // 如果沒有設置待命區，顯示場上所有未出發的救護車 (相容舊邏輯)
+                                        ambulances = gameState.current.emergencyVehicles.filter(v => v.type === 'ambulance' && v.state !== 'departing');
+                                    }
 
+                                    if (ambulances.length === 0) {
+                                        return <div className="text-gray-500 text-center py-4">待命區無車輛</div>;
+                                    }
+
+                                    return ambulances.map((amb, idx) => {
+                                        // 載送規則檢查
+                                        const canLoad = (patientTag) => {
+                                            const p = amb.passengers;
+                                            // 規則: 1紅 OR 1黃1綠 OR 2綠
+                                            if (p.length === 0) return true; // 空車可載任何人
+                                            
+                                            // 已經有乘客的狀況
+                                            const hasRed = p.includes('red');
+                                            const hasYellow = p.includes('yellow');
+                                            const greens = p.filter(c => c === 'green').length;
+
+                                            if (hasRed) return false; // 有紅就滿了
+                                            
+                                            if (patientTag === 'red') return false; // 已有人則不能載紅
+
+                                            if (patientTag === 'yellow') {
+                                                // 欲載黃：車上只能有 1 綠 (且無黃無紅)
+                                                return greens === 1 && !hasYellow;
+                                            }
+                                            if (patientTag === 'green') {
+                                                // 欲載綠：車上可以是 1 黃 OR 1 綠
+                                                if (hasYellow) return true; // 1黃+1綠 OK
+                                                if (greens === 1) return true; // 2綠 OK
+                                                return false;
+                                            }
+                                            return false;
+                                        };
+
+                                        const handleAmbulanceClick = () => {
+                                            if (!selectedPatient) return;
+                                            
+                                            if (canLoad(selectedPatient.triageTag)) {
+                                                // 執行上車
+                                                amb.passengers.push(selectedPatient.triageTag);
+                                                selectedPatient.onAmbulance = true; // 標記為已上車
+                                                setSelectedPatient(null); // 清除選擇
+                                                
+                                                // 檢查是否滿載並出發
+                                                const p = amb.passengers;
+                                                const hasRed = p.includes('red');
+                                                const hasYellow = p.includes('yellow');
+                                                const greens = p.filter(c => c === 'green').length;
+                                                
+                                                // 滿載條件: 1紅 OR 1黃1綠 OR 2綠
+                                                if (hasRed || (hasYellow && greens >= 1) || greens >= 2) {
+                                                    amb.state = 'departing';
+                                                }
+                                                // 強制重繪
+                                                setSurvivorCount(prev => prev); 
+                                            } else {
+                                                alert("不符合載送規則或車位已滿！\n規則: 1紅 或 1黃1綠 或 2綠");
+                                            }
+                                        };
+
+                                        return (
+                                            <div 
+                                                key={amb.id || idx} 
+                                                onClick={handleAmbulanceClick}
+                                                className={`bg-slate-800/50 p-3 rounded border border-slate-700 hover:bg-slate-700 cursor-pointer transition
+                                                    ${selectedPatient ? (canLoad(selectedPatient.triageTag) ? 'ring-2 ring-green-500' : 'opacity-50 cursor-not-allowed') : ''}
+                                                `}
+                                            >
+                                                <div className="flex justify-between mb-2">
+                                                    <span className="font-bold text-gray-300">救護車 #{idx+1}</span>
+                                                    <span className="text-xs text-blue-400">點擊載入</span>
+                                                </div>
+                                                <div className="flex gap-1 h-4 bg-slate-900 rounded overflow-hidden">
+                                                    {amb.passengers.length === 0 && <div className="w-full text-[10px] text-center text-gray-600 leading-4">空車</div>}
+                                                    {amb.passengers.map((tag, pi) => (
+                                                        <div key={pi} className={`flex-1 h-full ${
+                                                            tag === 'red' ? 'bg-red-500' : 
+                                                            tag === 'yellow' ? 'bg-yellow-500' : 'bg-green-500'
+                                                        }`}></div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                      {/* --- 新增：檢傷統計面板 (畫面正上方置中) --- */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 pointer-events-none select-none z-50">
+                        <div className="flex gap-4 bg-black/80 p-2 px-4 border-b-2 border-gray-600 rounded-b-lg shadow-xl">
+                            {/* 綠色 */}
+                            <div className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.8)]"></span>
+                                <span className="text-xs text-gray-300">綠色:</span>
+                                <span className="text-sm font-bold text-green-400">{triageCounts.green}</span>
+                            </div>
+                            {/* 黃色 */}
+                            <div className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_5px_rgba(234,179,8,0.8)]"></span>
+                                <span className="text-xs text-gray-300">黃色:</span>
+                                <span className="text-sm font-bold text-yellow-400">{triageCounts.yellow}</span>
+                            </div>
+                            {/* 紅色 */}
+                            <div className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-red-600 shadow-[0_0_5px_rgba(220,38,38,0.8)]"></span>
+                                <span className="text-xs text-gray-300">紅色:</span>
+                                <span className="text-sm font-bold text-red-500">{triageCounts.red}</span>
+                            </div>
+                            {/* 黑色 */}
+                            <div className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-gray-600 shadow-[0_0_5px_rgba(107,114,128,0.8)]"></span>
+                                <span className="text-xs text-gray-300">黑色:</span>
+                                <span className="text-sm font-bold text-gray-400">{triageCounts.black}</span>
+                            </div>
+                        </div>
+                    </div>
+                    </>
+                    )}
                     {/* 地墊選擇選單 */}
                     {showMatSelector && (
-                        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-black/90 p-4 rounded-lg border border-gray-500 shadow-xl flex gap-4 z-50">
+                        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/90 p-4 rounded-lg border border-gray-500 shadow-xl flex gap-4 z-50">
                              {[
                                     { id: 'green', label: '輕傷區', bg: 'bg-green-500', hover: 'hover:bg-green-400', text: 'text-black' },
                                     { id: 'yellow', label: '中傷區', bg: 'bg-yellow-500', hover: 'hover:bg-yellow-400', text: 'text-black' },
@@ -1992,7 +2427,7 @@
                     </div>
                 
                     {/* --- 修改：道具欄移至此處 (外層黑色區域) --- */}
-                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto select-none z-50">
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 pointer-events-auto select-none z-50">
                         <div className="flex gap-1 bg-black/80 p-2 border border-gray-600 rounded-md shadow-[0_0_15px_rgba(0,0,0,0.8)]">
                             {items.map((item, i) => (
                                 <div 
@@ -2016,6 +2451,93 @@
                     </div>
 
                 </div>
+                
+                {/* ★★★ 新增：檢傷平板浮動視窗 (靠右顯示) ★★★ */}
+                    {showTabletUI && (
+                        <div className="absolute top-16 right-4 w-80 bg-slate-900/95 border-2 border-purple-500 rounded-lg shadow-[0_0_30px_rgba(147,51,234,0.3)] p-4 text-white z-50 max-h-[80vh] overflow-y-auto font-sans animate-fade-in custom-scrollbar">
+                            <div className="flex justify-between items-center mb-4 border-b border-purple-500/50 pb-2">
+                                <h2 className="text-lg font-bold text-purple-400 flex items-center gap-2">
+                                    <IconActivity /> 檢傷指揮系統
+                                </h2>
+                                <button onClick={() => {setShowTabletUI(false); setSelectedSlot(-1);}} className="text-gray-400 hover:text-white px-2 hover:bg-white/10 rounded transition">✕</button>
+                            </div>
+
+                            {/* 1. 救護車資源區塊 */}
+                            <div className="mb-4 bg-slate-800/50 p-3 rounded border border-slate-700 backdrop-blur-sm">
+                                <h3 className="text-blue-400 font-bold mb-2 text-sm flex items-center gap-2">
+                                    🚑 救護資源監控
+                                </h3>
+                                {(() => {
+                                    // 計算在待命區內的救護車數量
+                                    const staging = gameState.current.triageMats.find(m => m.color === 'ambulance_staging');
+                                    let count = 0;
+                                    if (staging) {
+                                        count = gameState.current.emergencyVehicles.filter(v => 
+                                            v.type === 'ambulance' && 
+                                            v.x >= staging.x && v.x <= staging.x + staging.w &&
+                                            v.y >= staging.y && v.y <= staging.y + staging.h
+                                        ).length;
+                                    }
+                                    return (
+                                        <div className="flex justify-between items-center bg-slate-900/80 p-2 rounded">
+                                            <span className="text-sm text-gray-300">待命區車輛數:</span>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-2xl font-bold text-blue-500">{count}</span>
+                                                <span className="text-xs text-gray-500">輛</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            {/* 2. 各區傷患名單 */}
+                            <div className="space-y-3">
+                                <h3 className="text-yellow-400 font-bold text-sm border-b border-gray-700 pb-1 mb-2">📋 各區安置傷患清冊</h3>
+                                {['red', 'yellow', 'green', 'black'].map(tag => {
+                                    const tagLabels = { red: '🔴 紅色 (優先)', yellow: '🟡 黃色 (延後)', green: '🟢 綠色 (輕傷)', black: '⚫ 黑色 (死亡)' };
+                                    const tagColors = { red: 'text-red-400 border-red-900/30', yellow: 'text-yellow-400 border-yellow-900/30', green: 'text-green-400 border-green-900/30', black: 'text-gray-400 border-gray-700' };
+                                    
+                                    // 篩選出已抵達該區域的傷患 (hasArrived = true)
+                                    const patients = gameState.current.survivors.filter(s => s.triageTag === tag && s.hasArrived);
+
+                                    return (
+                                        <div key={tag} className={`bg-slate-800/30 rounded border overflow-hidden ${tagColors[tag].split(' ')[1]}`}>
+                                            <div className={`px-3 py-1.5 bg-slate-950/30 font-bold text-xs flex justify-between items-center ${tagColors[tag].split(' ')[0]}`}>
+                                                <span>{tagLabels[tag]}</span>
+                                                <span className="bg-white/10 px-2 rounded-full text-[10px] py-0.5 min-w-[20px] text-center">{patients.length}</span>
+                                            </div>
+                                            
+                                            {patients.length > 0 ? (
+                                                <div className="max-h-[150px] overflow-y-auto">
+                                                     
+                                                    {patients.map((p, idx) => (
+                                                        <div key={idx} 
+                                                         // ★★★ 新增：加入點擊事件以設定選中傷患 ★★★
+                                                         onClick={() => setSelectedPatient(p)}
+                                                        className={`text-[11px] flex justify-between items-center border-t border-white/5 p-2 hover:bg-white/5 transition-colors groupcursor-pointer
+                                                         ${selectedPatient === p ? 'bg-blue-600/50 ring-1 ring-blue-400' : ''}`}>
+
+                                                            <div className="flex gap-2 items-center">
+                                                                <span className="text-gray-500 font-mono w-4">{(idx+1).toString().padStart(2,'0')}</span>
+                                                                <span className="text-gray-300">{p.data.sex}/{p.data.age}歲</span>
+                                                            </div>
+                                                            <div className="text-right truncate max-w-[100px] text-gray-400 group-hover:text-gray-200">
+                                                                {p.data.injuryText}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="p-2 text-center text-[10px] text-gray-600 italic">
+                                                    此區域目前無傷患
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -2025,5 +2547,3 @@
     </script>
 </body>
 </html>
-
-
