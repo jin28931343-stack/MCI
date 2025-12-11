@@ -62,7 +62,17 @@
         .animate-blink {
             animation: blink 1s infinite;
         }
-        
+        /* 新增：防止虛擬手把觸發瀏覽器預設行為 */
+        .touch-control-btn {
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            backdrop-filter: blur(2px);
+        }
+        .touch-control-btn:active {
+            transform: scale(0.95);
+            transition: transform 0.1s;
+        }
     </style>
 </head>
 <body>
@@ -277,7 +287,19 @@
                 const clothColor = `hsl(${Math.random() * 360}, 40%, 60%)`;
                 return { sex, age, severity, consciousness, resp, pulse, injuryText, isBleeding, clothColor };
             };
-            
+            // ★★★ 新增：虛擬手把事件處理 ★★★
+            const handleTouch = (key, active) => {
+                if (gameState.current.isGameOver) return;
+
+                // 移動控制 (WASD) - 直接修改狀態以獲得最即時的反應
+                if (['w', 'a', 's', 'd'].includes(key)) {
+                    gameState.current.keys[key] = active;
+                } 
+                // 功能鍵 (E, C) - 模擬鍵盤事件以觸發 useEffect 內的複雜邏輯
+                else if (active) {
+                    window.dispatchEvent(new KeyboardEvent('keydown', { key: key }));
+                }
+            };
             useEffect(() => {
                 if (gameOver) return;
 
@@ -1933,8 +1955,7 @@
                     }
                     // ========================================
 
-                    if (state.keys.w) { nextY -= speed; p.dir = 1; p.moving = true; }
-                    if (state.keys.w) { nextY -= speed; p.dir = 1; p.moving = true; }
+                    if (state.keys.w) { nextY -= speed; p.dir = 1; p.moving = true; }               
                     if (state.keys.s) { nextY += speed; p.dir = 0; p.moving = true; }
                     if (state.keys.a) { nextX -= speed; p.dir = 2; p.moving = true; }
                     if (state.keys.d) { nextX += speed; p.dir = 3; p.moving = true; }
@@ -2483,111 +2504,66 @@
                             ))}
                         </div>
                     </div>
-
-                </div>
-                
-                {/* ★★★ 新增：檢傷平板浮動視窗 (靠右顯示) ★★★ */}
-                    {showTabletUI && (
-                        <div className="absolute top-16 right-4 w-80 bg-slate-900/95 border-2 border-purple-500 rounded-lg shadow-[0_0_30px_rgba(147,51,234,0.3)] p-4 text-white z-50 max-h-[80vh] overflow-y-auto font-sans animate-fade-in custom-scrollbar">
-                            <div className="flex justify-between items-center mb-4 border-b border-purple-500/50 pb-2">
-                                <h2 className="text-lg font-bold text-purple-400 flex items-center gap-2">
-                                    <IconActivity /> 檢傷指揮系統
-                                </h2>
-                                <button onClick={() => {setShowTabletUI(false); setSelectedSlot(-1);}} className="text-gray-400 hover:text-white px-2 hover:bg-white/10 rounded transition">✕</button>
-                            </div>
-
-                            {/* 1. 救護車資源區塊 */}
-                            <div className="mb-4 bg-slate-800/50 p-3 rounded border border-slate-700 backdrop-blur-sm">
-                                <h3 className="text-blue-400 font-bold mb-2 text-sm flex items-center gap-2">
-                                    🚑 救護資源監控
-                                </h3>
-                                {(() => {
-                                    // 計算在待命區內的救護車數量
-                                    const staging = gameState.current.triageMats.find(m => m.color === 'ambulance_staging');
-                                    let count = 0;
-                                    if (staging) {
-                                        count = gameState.current.emergencyVehicles.filter(v => 
-                                            v.type === 'ambulance' && 
-                                            v.x >= staging.x && v.x <= staging.x + staging.w &&
-                                            v.y >= staging.y && v.y <= staging.y + staging.h
-                                        ).length;
-                                    }
-                                    return (
-                                        <div className="flex justify-between items-center bg-slate-900/80 p-2 rounded">
-                                            <span className="text-sm text-gray-300">待命區車輛數:</span>
-                                            <div className="flex items-baseline gap-1">
-                                                <span className="text-2xl font-bold text-blue-500">{count}</span>
-                                                <span className="text-xs text-gray-500">輛</span>
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-
-                            {/* 2. 各區傷患名單 */}
-                            <div className="space-y-3">
-                                <h3 className="text-yellow-400 font-bold text-sm border-b border-gray-700 pb-1 mb-2">📋 各區安置傷患清冊</h3>
-                                {['red', 'yellow', 'green', 'black'].map(tag => {
-                                    const tagLabels = { red: '🔴 紅色 (優先)', yellow: '🟡 黃色 (延後)', green: '🟢 綠色 (輕傷)', black: '⚫ 黑色 (死亡)' };
-                                    const tagColors = { red: 'text-red-400 border-red-900/30', yellow: 'text-yellow-400 border-yellow-900/30', green: 'text-green-400 border-green-900/30', black: 'text-gray-400 border-gray-700' };
-                                    
-                                    // 篩選出已抵達該區域的傷患 (hasArrived = true)
-                                    const patients = gameState.current.survivors.filter(s => s.triageTag === tag && s.hasArrived);
-
-                                    return (
-                                        <div key={tag} className={`bg-slate-800/30 rounded border overflow-hidden ${tagColors[tag].split(' ')[1]}`}>
-                                            <div className={`px-3 py-1.5 bg-slate-950/30 font-bold text-xs flex justify-between items-center ${tagColors[tag].split(' ')[0]}`}>
-                                                <span>{tagLabels[tag]}</span>
-                                                <span className="bg-white/10 px-2 rounded-full text-[10px] py-0.5 min-w-[20px] text-center">{patients.length}</span>
-                                            </div>
-                                            
-                                            {patients.length > 0 ? (
-                                                <div className="max-h-[150px] overflow-y-auto">
-                                              {patients.map((p, idx) => {
-                                                        // ★★★ 修改：定義選中與已後送狀態 ★★★
-                                                        const isSelected = selectedPatient === p;
-                                                        const isEvacuated = p.onAmbulance; 
-
-                                                        return (
-                                                            <div 
-                                                                key={idx} 
-                                                                // ★★★ 修改：加入點擊選取功能，若已後送則禁止點擊 ★★★
-                                                                onClick={() => !isEvacuated && setSelectedPatient(isSelected ? null : p)}
-                                                                className={`text-[11px] flex justify-between items-center border-t border-white/5 p-2 transition-colors group cursor-pointer
-                                                                    ${isSelected ? 'bg-blue-600/50 ring-1 ring-blue-400' : 'hover:bg-white/5'}
-                                                                    ${isEvacuated ? 'opacity-50 cursor-not-allowed bg-black/20' : ''}
-                                                                `}
-                                                            >
-                                                                <div className="flex gap-2 items-center">
-                                                                    <span className="text-gray-500 font-mono w-4">{(idx+1).toString().padStart(2,'0')}</span>
-                                                                    <span className="text-gray-300">{p.data.sex}/{p.data.age}歲</span>
-                                                                </div>
-                                                                <div className="text-right truncate max-w-[100px] text-gray-400 group-hover:text-gray-200">
-                                                                    {/* ★★★ 修改：顯示傷情或已後送狀態 ★★★ */}
-                                                                    {isEvacuated ? (
-                                                                        <span className="text-red-400 font-bold">已後送</span>
-                                                                    ) : (
-                                                                        p.data.injuryText
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            ) : (
-                                                <div className="p-2 text-center text-[10px] text-gray-600 italic">
-                                                    此區域目前無傷患
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                     {/* ★★★ 新增：左下角虛擬方向鍵 (十字鍵) ★★★ */}
+                    <div className="absolute bottom-8 left-8 w-44 h-44 z-[60] opacity-60 touch-control-btn">
+                        <div className="relative w-full h-full">
+                            {/* 上 (W) */}
+                            <div 
+                                className="absolute top-0 left-1/2 -translate-x-1/2 w-14 h-16 bg-slate-700/80 rounded-t-lg border-2 border-slate-500 flex items-center justify-center text-2xl shadow-lg"
+                                onTouchStart={(e) => { e.preventDefault(); handleTouch('w', true); }}
+                                onTouchEnd={(e) => { e.preventDefault(); handleTouch('w', false); }}
+                            >▲</div>
+                            {/* 下 (S) */}
+                            <div 
+                                className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-16 bg-slate-700/80 rounded-b-lg border-2 border-slate-500 flex items-center justify-center text-2xl shadow-lg"
+                                onTouchStart={(e) => { e.preventDefault(); handleTouch('s', true); }}
+                                onTouchEnd={(e) => { e.preventDefault(); handleTouch('s', false); }}
+                            >▼</div>
+                            {/* 左 (A) */}
+                            <div 
+                                className="absolute top-1/2 left-0 -translate-y-1/2 w-16 h-14 bg-slate-700/80 rounded-l-lg border-2 border-slate-500 flex items-center justify-center text-2xl shadow-lg"
+                                onTouchStart={(e) => { e.preventDefault(); handleTouch('a', true); }}
+                                onTouchEnd={(e) => { e.preventDefault(); handleTouch('a', false); }}
+                            >◀</div>
+                            {/* 右 (D) */}
+                            <div 
+                                className="absolute top-1/2 right-0 -translate-y-1/2 w-16 h-14 bg-slate-700/80 rounded-r-lg border-2 border-slate-500 flex items-center justify-center text-2xl shadow-lg"
+                                onTouchStart={(e) => { e.preventDefault(); handleTouch('d', true); }}
+                                onTouchEnd={(e) => { e.preventDefault(); handleTouch('d', false); }}
+                            >▶</div>
+                            {/* 中心裝飾 */}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 bg-slate-800 rounded-full border border-slate-600"></div>
                         </div>
-                    )}
+                    </div>
+
+                    {/* ★★★ 新增：右下角虛擬功能鍵 (E/C) ★★★ */}
+                    <div className="absolute bottom-10 right-8 z-[60] flex items-end gap-6 opacity-70 touch-control-btn">
+                        {/* 取消鍵 (C) - 較小，紅色 */}
+                        <div 
+                            className="w-16 h-16 bg-red-900/80 rounded-full border-2 border-red-500 flex flex-col items-center justify-center shadow-lg active:bg-red-700"
+                            onTouchStart={(e) => { e.preventDefault(); handleTouch('c', true); }}
+                        >
+                            <span className="text-xl font-bold">✕</span>
+                            <span className="text-[10px]">取消</span>
+                        </div>
+                        
+                        {/* 互動/放置鍵 (E) - 較大，藍色，位置稍微靠上符合人體工學 */}
+                        <div 
+                            className="w-24 h-24 bg-blue-700/80 rounded-full border-4 border-blue-400 flex flex-col items-center justify-center shadow-xl mb-6 active:bg-blue-600"
+                            onTouchStart={(e) => { e.preventDefault(); handleTouch('e', true); }}
+                        >
+                            <span className="text-3xl font-bold">E</span>
+                            <span className="text-xs">互動/放置</span>
+                        </div>
+                    </div>
+
                 </div>
+                 </div> 
             );
         }
+               
+                
+               
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
