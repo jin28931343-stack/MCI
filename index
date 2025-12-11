@@ -338,13 +338,30 @@
                 };
                 const resize = () => {
                     if (!canvas) return;
-                    let scale = Math.min(window.innerWidth / GAME_WIDTH, window.innerHeight / GAME_HEIGHT);
+                    let winW = window.innerWidth;
+                    let winH = window.innerHeight;
+                    // 檢查是否處於「CSS強制橫屏」模式 (即手機直立時)
+                    // 注意：需配合 CSS 中的 @media (orientation: portrait) 旋轉設定
+                    const isForcedLandscape = window.matchMedia("(max-device-width: 1024px) and (orientation: portrait)").matches;
+
+                    if (isForcedLandscape) {
+                        // 因為 CSS 將 body 旋轉了 90 度，所以「視覺上」的寬度其實是 window.innerHeight
+                        // 我們需要交換寬高來計算正確的縮放比例
+                        [winW, winH] = [winH, winW];
+                    }
+
+                    // 計算縮放比例，確保填滿螢幕且不溢出
+                    let scale = Math.min(winW / GAME_WIDTH, winH / GAME_HEIGHT);
                     canvas.style.width = `${GAME_WIDTH * scale}px`;
                     canvas.style.height = `${GAME_HEIGHT * scale}px`;
                 };
                 canvas.width = GAME_WIDTH;
                 canvas.height = GAME_HEIGHT;
                 window.addEventListener('resize', resize);
+                 // 增加監聽轉向事件 (針對移動裝置)
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(resize, 100); // 延遲一下等待瀏覽器重新排版
+                    });
                 resize();
 
                 const PALETTE = {
