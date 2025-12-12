@@ -114,6 +114,12 @@
         .playing-wave .bar:nth-child(4) {
             animation-delay: 0.3s;
         }
+
+        /* ★★★ 自定義像素箭頭鼠標 CSS ★★★ */
+        .cursor-pixel {
+            /* 使用 SVG Data URI 繪製像素風格箭頭 (白底黑邊) */
+            cursor: url("data:image/svg+xml,%3Csvg height='32' width='32' viewBox='0 0 32 32' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='shadow' x='-2' y='-2' width='200%25' height='200%25'%3E%3CfeDropShadow dx='1' dy='1' stdDeviation='1' flood-color='rgba(0,0,0,0.5)'/%3E%3C/filter%3E%3Cpath d='M2 2 L2 20 L6 16 L10 25 L13 23 L9 14 L15 14 L2 2 Z' fill='white' stroke='black' stroke-width='2' stroke-linejoin='round' filter='url(%23shadow)'/%3E%3C/svg%3E") 2 2, auto;
+        }
     </style>
 </head>
 
@@ -126,34 +132,41 @@
         const IconAlert = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>;
         const IconMapPin = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>;
         const IconActivity = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>;
-        // ★★★ 新增：音量圖示 ★★★
+        // ★★★ 音量圖示 ★★★
         const IconVolume = ({ muted }) => muted ?
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg> :
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>;
         function App() {
             const canvasRef = useRef(null);
+            const [missionComplete, setMissionComplete] = useState(false);
+            const [resultStats, setResultStats] = useState(null);
             const [survivorCount, setSurvivorCount] = useState(0);
+            const [evacuatedCount, setEvacuatedCount] = useState(0);
             const [selectedSlot, setSelectedSlot] = useState(0);
-            // ★★★ 修正 1: 新增 Ref 來追蹤 selectedSlot，解決 Event Listener 讀不到最新狀態的問題 ★★★
+            // ★★★ 專門用於強制畫面更新的 state，避免汙染 survivorCount ★★★
+            const [updateCount, forceUpdate] = useState(0);
+            // ★★★  Ref 來追蹤 selectedSlot，解決 Event Listener 讀不到最新狀態的問題 ★★★
             const selectedSlotRef = useRef(selectedSlot);
-            // ★★★ 修正: 必須加入此 useEffect，讓 Ref 跟隨 State 更新 ★★★
+            // ★★★ 必須加入此 useEffect，讓 Ref 跟隨 State 更新★★★
             useEffect(() => {
                 selectedSlotRef.current = selectedSlot;
             }, [selectedSlot]);
             const [gameOver, setGameOver] = useState(false);
             const [showMatSelector, setShowMatSelector] = useState(false);
-            // ★★★ 新增：音訊控制相關 State 與 Ref ★★★
+            // ★★★ 控制道具欄顯示的狀態 (預設隱藏，按 I 切換) ★★
+            const [showInventory, setShowInventory] = useState(false);
+            // ★★★ 音訊控制相關 State 與 Ref ★★★
             const audioCtxRef = useRef(null);
             const [isMuted, setIsMuted] = useState(true);
             const isMutedRef = useRef(true); // 用於在 Scheduler 中讀取
             const nextNoteTimeRef = useRef(0);
             const schedulerTimerRef = useRef(null);
             const sequenceStepRef = useRef(0);
-
+            const [score, setScore] = useState(0);
             // 同步靜音狀態到 Ref
             useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
-            // ★★★ 新增：初始化音訊環境 (8-bit Synth) ★★★
+            // ★★★ 初始化音訊環境 (8-bit Synth) ★★★
             const initAudio = () => {
                 if (!audioCtxRef.current) {
                     const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -164,7 +177,7 @@
                 }
             };
 
-            // ★★★ 新增：播放單音 (Oscillator) ★★★
+            // ★★★ 播放單音 (Oscillator) ★★★
             const playOscillator = (freq, type, startTime, duration, vol) => {
                 if (!audioCtxRef.current || isMutedRef.current) return;
                 const ctx = audioCtxRef.current;
@@ -185,7 +198,7 @@
                 osc.stop(startTime + duration);
             };
 
-            // ★★★ 新增：播放鼓聲 (Noise) ★★★
+            // ★★★ 播放鼓聲 (Noise) ★★★
             const playDrum = (startTime) => {
                 if (!audioCtxRef.current || isMutedRef.current) return;
                 const ctx = audioCtxRef.current;
@@ -212,7 +225,7 @@
                 noise.start(startTime);
             }
 
-            // ★★★ 新增：音樂排程器 (Music Loop) ★★★
+            // ★★★ 音樂排程器 (Music Loop) ★★★
             const scheduler = () => {
                 if (!audioCtxRef.current) return;
                 const lookahead = 25.0; // 毫秒
@@ -229,7 +242,7 @@
                 schedulerTimerRef.current = setTimeout(scheduler, lookahead);
             };
 
-            // ★★★ 新增：樂句編曲 (Pattern) ★★★
+            // ★★★ 樂句編曲 (Pattern) ★★★
             const scheduleNote = (step, time) => {
                 if (isMutedRef.current) return;
 
@@ -261,7 +274,7 @@
                 }
             };
 
-            // ★★★ 新增：開關音樂函式 ★★★
+            // ★★★ 開關音樂函式 ★★★
             const toggleAudio = () => {
                 const newVal = !isMuted;
                 setIsMuted(newVal);
@@ -280,9 +293,13 @@
             useEffect(() => {
                 return () => clearTimeout(schedulerTimerRef.current);
             }, []);
+            const statsTracker = useRef({
+                tourniquet: { correct: 0, total: 0 },
+                airway: { correct: 0, total: 0 },
+                deconCount: 0
+            });
 
-
-            // --- 新增狀態追蹤各類別已安置人數 ---
+            // --- 狀態追蹤各類別已安置人數 ---
             // ★★★ 新增：控制平板 UI 顯示的狀態 ★★★
             const [showTabletUI, setShowTabletUI] = useState(false);
             // ★★★ 新增：目前在平板介面中選中的傷患 ★★★
@@ -300,7 +317,7 @@
                 sp: 100, maxSp: 100
             });
 
-            const totalSurvivors = 12;
+            const totalSurvivors = 30;
 
             const gameState = useRef({
                 isGameOver: false,
@@ -322,7 +339,7 @@
                 survivors: [],
                 feedbacks: [],
                 firefightingSquads: [],
-                rescueSquads: [], // 新增: 破壞救援小組陣列
+                rescueSquads: [], // 破壞救援小組陣列
                 staticNpcs: [],
                 interactionMenu: {
                     active: false, x: 0, y: 0, target: null, mode: 'main'
@@ -334,6 +351,13 @@
                     w: 120, h: 80,
                     valid: false,
                     x: 0, y: 0
+                },
+                // ★★★ 搬運系統冷卻計時器 (初始化為 0) ★★★
+                carrySystemCooldown: 0,
+                ambulanceCooldown: 0, // 救護車呼叫冷卻時間
+                megaphoneCooldown: 0,
+                interactionMenu: {
+                    active: false, x: 0, y: 0, target: null, mode: 'main'
                 },
                 survivorsFoundCount: 0,
                 animationFrameId: null,
@@ -347,16 +371,18 @@
                 { name: "檢傷地墊", color: "#27ae60", type: "mat" },          // 3
                 { name: "指揮站", color: "#ffffff", type: "command_post" }, // 4
                 { name: "除汙站", color: "#95a5a6", type: "decon" },        // 5
-                { name: "救護車待命區", color: "#3498db", type: "ambulance_staging" },  // 6
+                { name: "救護車待命區", color: "#3498db", type: "ambulance_staging" },//6 
+                { name: "大聲公", color: "#e67e22", type: "megaphone" }, // 7
             ];
 
 
             const handleSlotClick = (index) => {
+                const item = items[index];
                 if (selectedSlot === index) {
                     // 如果點擊的是當前選中的欄位，則取消選中
                     setSelectedSlot(-1);
                     setShowMatSelector(false);
-                    // ★★★ 新增：取消選中時關閉平板 ★★★
+                    // ★★★取消選中時關閉平板 ★★★
                     setShowTabletUI(false);
                     setSelectedPatient(null); // 清除選中傷患
                     gameState.current.placementMode.active = false;
@@ -365,19 +391,99 @@
                         gameState.current.interactionMenu.active = false;
                         gameState.current.interactionMenu.mode = 'main';
                     }
+
                     return;
                 }
-                // ★★★ 新增此行：防止按鍵觸發不存在的道具導致崩潰 ★★★
-                if (!items[index]) return;
+                if (!item) return;
+                else if (item.type === 'megaphone') {
+                    setShowMatSelector(false);
+                    setShowTabletUI(false);
+                    gameState.current.placementMode.active = false;
+                    gameState.current.interactionMenu.active = false;
+
+                    const state = gameState.current;
+
+                    // 檢查冷卻 (30秒)
+                    if (state.megaphoneCooldown > 0) {
+                        state.feedbacks.push({
+                            x: state.player.x,
+                            y: state.player.y - 50,
+                            text: `大聲公冷卻中 (${Math.ceil(state.megaphoneCooldown / 60)}s)`,
+                            color: "#bdc3c7",
+                            life: 60,
+                            vy: -0.5
+                        });
+                        return;
+                    }
+
+                    // 設定冷卻時間 (30秒 * 60 FPS)
+                    state.megaphoneCooldown = 1800;
+
+                    // 邏輯：搜尋畫面內的綠色傷患，並觸發移動
+                    const camX = state.camera.x;
+                    const camY = state.camera.y;
+                    const viewW = 960; // 遊戲寬度
+                    const viewH = 540; // 遊戲高度
+                    let count = 0;
+                    state.survivors.forEach(s => {
+                        // ★★★ 修改：只要是「實際輕傷 (Green)」且「在畫面內」，不論是否已檢傷，都強制處理 ★★★
+                        const isInView = s.x >= camX && s.x <= camX + viewW && s.y >= camY && s.y <= camY + viewH;
+
+                        if (isInView && s.data.severity === 'green' && !s.hasArrived && !s.onAmbulance) {
+
+                            // 1. 強制檢傷邏輯：如果尚未被標記為綠色，自動標記並加分
+                            if (s.triageTag !== 'green') {
+                                s.triageTag = 'green';
+                                s.found = true;
+
+                                // 補上加分邏輯 (比照手動檢傷正確 +100)
+                                if (!s.hasBeenScored) {
+                                    setScore(prev => prev + 100);
+                                    state.feedbacks.push({
+                                        x: s.x, y: s.y - 50, text: "強制檢傷 +100", color: "#f1c40f", life: 60, vy: -0.5
+                                    });
+                                    s.hasBeenScored = true;
+                                }
+                            }
+
+                            // 2. 觸發移動邏輯
+                            if (!s.isEvacuating) {
+                                s.isEvacuating = true; // 將狀態設為移動中
+                                count++;
+
+                                // 給予個別傷患一點視覺回饋
+                                state.feedbacks.push({
+                                    x: s.x, y: s.y - 20, text: "收到集合指令!", color: "#2ecc71", life: 40, vy: -0.5
+                                });
+                            }
+                        }
+                    });
+
+                    // ★★★ 更新全域檢傷計數 (因為可能有新的傷患被強制檢傷) ★★★
+                    state.survivorsFoundCount = state.survivors.filter(s => s.found).length;
+                    setSurvivorCount(state.survivorsFoundCount);
+
+                    // 玩家回饋
+                    state.feedbacks.push({
+                        x: state.player.x,
+                        y: state.player.y - 60,
+                        text: count > 0 ? `廣播：${count}名輕傷者前往集合點` : "範圍內無可移動輕傷者",
+                        color: "#e67e22",
+                        life: 90,
+                        vy: -0.5
+                    });
+                    return;
+                }
+
+
                 setSelectedSlot(index);
-                const item = items[index];
                 // --- 移除 MP 檢查：點擊道具時不再檢查 MP ---
                 // if (item.type === 'radio' && gameState.current.stats.mp < 10) {
                 //      addFeedback(gameState.current.player.x, gameState.current.player.y - 50, "MP不足!", "#e74c3c");
                 //      setSelectedSlot(-1); // 取消選擇
                 //      return; 
                 // }
-                // ★★★ 新增：切換道具時先關閉其他 UI ★★★
+                // ★★★ 切換道具時先關閉其他 UI ★★★
                 setShowMatSelector(false);
                 setShowTabletUI(false);
                 gameState.current.placementMode.active = false;
@@ -385,10 +491,10 @@
                 if (item.type === "mat") {
                     setShowMatSelector(true);
                 } else if (item.type === 'tablet') {
-                    // ★★★ 新增：如果是平板，開啟 UI ★★★
+                    // ★★★ 如果是平板，開啟 UI ★★★
                     setShowTabletUI(true);
                 } else if (['command_post', 'ambulance_staging', 'decon'].includes(item.type)) {
-                    // ★★★ 新增：限制特殊區域只能設置一個 ★★★
+                    // ★★★ 限制特殊區域只能設置一個 ★★★
                     // 檢查場景中是否已存在相同類型的區域 (使用 color 作為識別)
                     const alreadyExists = gameState.current.triageMats.some(m => m.color === item.type);
 
@@ -433,7 +539,7 @@
                         mode: 'radio' // 新增無線電模式
                     };
                 }
-                // --- 新增：處理新工具點擊 ---
+                // --- 處理新工具點擊 ---
                 else if (['breaker_tool', 'extinguisher_tool'].includes(item.type)) {
                     setShowMatSelector(false);
                     setShowTabletUI(false);
@@ -464,7 +570,21 @@
             };
 
             const handleRestart = () => {
-                setGameOver(false);
+                setGameOver(true);
+                setTimeout(() => {
+                    setMissionComplete(false); // 關閉任務完成畫面
+                    setResultStats(null);      // 清除結算數據
+                    setScore(0);               // 重置分數
+
+                    // 確保 UI 上的計數器歸零 (雖然 useEffect 會重置部分，但手動確保 UI 同步更安全)
+                    setSurvivorCount(0);
+                    setEvacuatedCount(0);
+                    setTriageCounts({ green: 0, yellow: 0, red: 0, black: 0 });
+
+                    // 關鍵：將 gameOver 設回 false。
+                    // 這會觸發依賴 [gameOver] 的 useEffect 執行初始化邏輯，生成新的傷患與場景。
+                    setGameOver(false);
+                }, 50);
             };
 
             const generateSurvivorData = () => {
@@ -480,14 +600,14 @@
                 let isBleeding = false;
 
                 if (severityRoll > 0.9) {
-                    severity = 'black'; consciousness = '無意識'; resp = '無'; pulse = '無'; injuryText = '明顯死亡徵象';
+                    severity = 'black'; consciousness = '無意識'; resp = '無'; pulse = '無'; injuryText = '無呼吸';
                     isBleeding = false;
-                } else if (severityRoll > 0.6) {
+                } else if (severityRoll > 0.75) {
                     severity = 'red'; consciousness = Math.random() > 0.5 ? '無意識' : '對痛有反應';
                     resp = Math.random() > 0.5 ? '淺快 (>30/min)' : '微弱 (<10/min)';
-                    pulse = '微弱 (>120/min)'; injuryText = '大出血、氣胸';
+                    pulse = '微弱 (>120/min)'; injuryText = '臉色蒼白、多處撕裂傷';
                     isBleeding = Math.random() > 0.3;
-                } else if (severityRoll > 0.3) {
+                } else if (severityRoll > 0.50) {
                     severity = 'yellow'; consciousness = '對聲音有反應'; resp = '正常'; pulse = '正常但快'; injuryText = '骨折、無法行走';
                     isBleeding = Math.random() > 0.8;
                 } else {
@@ -495,10 +615,14 @@
                 }
 
                 const clothColor = `hsl(${Math.random() * 360}, 40%, 60%)`;
-                // ★★★ 新增：隨機設定是否被汙染 (例如 30% 機率) ★★★
+                // ★★★ 隨機設定是否被汙染 (例如 30% 機率) ★★★
                 const isContaminated = Math.random() > 0.7;
-                // ★★★ 修改：回傳物件加入 isContaminated ★★★
-                return { sex, age, severity, consciousness, resp, pulse, injuryText, isBleeding, clothColor, isContaminated };
+                // ★★★ 回傳物件加入 isContaminated ★★★
+                return {
+                    sex, age, severity, consciousness, resp, pulse, injuryText, isBleeding, clothColor, isContaminated,
+                    initialSeverity: severity,      // 記錄初始傷情 (用於計算紅色優先後送率)
+                    wasContaminated: isContaminated // 記錄是否曾經汙染 (用於計算除汙率)
+                };
             };
 
             useEffect(() => {
@@ -512,7 +636,7 @@
                 const GAME_HEIGHT = 540;
 
                 // --- 設定擴張 ---
-                // 新增左側偏移量 (約 4 台消防車寬度 + 緩衝 = 700px)
+                // 左側偏移量 (約 4 台消防車寬度 + 緩衝 = 700px)
                 const LEFT_EXPANSION = 700;
                 // 原本世界寬度 2000，加上擴張區域
                 const WORLD_WIDTH = 2000 + LEFT_EXPANSION;
@@ -535,7 +659,7 @@
                 state.frameCount = 0;
                 state.npcSpawnTimer = 0;
                 state.rescueSquads = [];
-                state.ambulanceCooldown = 0; // ★★★ 新增：救護車冷卻時間初始化 ★★★
+                state.ambulanceCooldown = 0; // ★★★ 救護車冷卻時間初始化 ★★★
                 state.stats = { hp: 100, maxHp: 100, mp: 80, maxMp: 100, sp: 100, maxSp: 100 };
 
                 // 玩家起始位置也跟著向右移，保持相對位置
@@ -549,6 +673,7 @@
                 state.interactionMenu = { active: false, x: 0, y: 0, target: null, mode: 'main' };
                 state.placementMode.active = false;
                 setSurvivorCount(0);
+                setEvacuatedCount(0);
                 setPlayerStatsUI({ ...state.stats });
                 setShowMatSelector(false);
                 const checkTriageCounts = () => {
@@ -615,7 +740,7 @@
                 };
 
                 state.emergencyVehicles.push(firetruckData);
-                // ★★★ 修改：初始救護車加入 passengers 與 ID ★★★
+                // ★★★ 初始救護車加入 passengers 與 ID ★★★
                 state.emergencyVehicles.push({
                     id: Math.random(), type: 'ambulance', passengers: [], state: 'waiting',
                     x: 80 + LEFT_EXPANSION, y: WORLD_HEIGHT / 2 + 100, w: 100, h: 50, angle: -0.2
@@ -815,11 +940,15 @@
                     if (e.key === 'd' || e.key === 'ArrowRight') state.keys.d = true;
                     if (e.key >= '1' && e.key <= '9') handleSlotClick(parseInt(e.key) - 1);
                     else if (e.key === '0') handleSlotClick(9);
-                    // --- 新增：C 鍵取消 ---
+                    // --- C 鍵取消 ---
                     if (e.key === 'c' || e.key === 'C') {
                         cancelAction();
                     }
-                    // --- 新增：按下 E 鍵互動 ---
+                    // ★★★ I 鍵切換道具欄顯示 ★★★
+                    if (e.key === 'i' || e.key === 'I') {
+                        setShowInventory(prev => !prev);
+                    }
+                    // --- 按下 E 鍵互動 ---
                     if (e.key === 'e' || e.key === 'E') {
                         const state = gameState.current;
                         const p = state.player;
@@ -963,6 +1092,10 @@
                                     if (['sedan', 'truck'].includes(o.type)) {
                                         // 檢查點擊是否在車輛範圍內
                                         if (clickX > o.x && clickX < o.x + o.w && clickY > o.y && clickY < o.y + o.h) {
+                                            if (state.rescueSquads.length > 0) {
+                                                addFeedback(clickX, clickY, "破壞小組忙碌中", "#e74c3c");
+                                                return;
+                                            }
                                             if (!o.isBreached && o.breakTimer === 0) {
                                                 if (state.stats.mp >= 10) {
                                                     state.stats.mp -= 10;
@@ -1047,13 +1180,24 @@
                                     if (menu.target) {
                                         menu.target.triageTag = colors[i];
                                         menu.target.found = true;
-                                        menu.target.hasArrived = false; // 新增：重置抵達狀態，讓傷患能再次被搬運或移動
-                                        menu.target.isEvacuating = false; // 新增：重置移動狀態 (避免從綠卡轉紅卡時仍繼續自行移動) 
+                                        menu.target.hasArrived = false; // 重置抵達狀態，讓傷患能再次被搬運或移動
+                                        menu.target.isEvacuating = false; // 重置移動狀態 (避免從綠卡轉紅卡時仍繼續自行移動) 
                                         state.survivorsFoundCount = state.survivors.filter(s => s.found).length;
                                         setSurvivorCount(state.survivorsFoundCount);
+                                        // 比對傷患實際傷情 (data.severity) 與選擇的顏色 (colors[i])
+                                        if (menu.target.data.severity === colors[i]) {
+                                            if (!menu.target.hasBeenScored) {
+                                                setScore(prev => prev + 100);
+                                                addFeedback(menu.x, menu.y - 50, "檢傷正確 +100", "#f1c40f");
+                                                menu.target.hasBeenScored = true; // 標記此傷患已獲得分數
+                                            }
+                                        } else {
+                                            // (選填) 若需要顯示錯誤提示可加在這
+                                            // addFeedback(menu.x, menu.y - 50, "判斷錯誤", "#95a5a6");
+                                        }
                                         addFeedback(menu.x, menu.y, "檢傷完成", colors[i] === 'black' ? '#999' : colors[i]);
 
-                                        // --- 修改開始：檢查實際傷情 ---
+                                        // --- 開始：檢查實際傷情 ---
                                         if (colors[i] === 'green') {
                                             // 只有玩家判定為綠色 且 實際傷情(data.severity)也是綠色，才會移動
                                             if (menu.target.data.severity === 'green') {
@@ -1073,8 +1217,11 @@
                         }
                         else if (menu.mode === 'treatment') {
                             if (clickX >= menuX - 20 && clickX <= menuX + 100 && clickY >= menuY - 50 && clickY <= menuY + 25) {
+                                statsTracker.current.tourniquet.total++; // 總嘗試次數
                                 if (menu.target && menu.target.data) {
                                     if (menu.target.data.isBleeding && !menu.target.isDead) {
+                                        setScore(prev => prev + 100);
+                                        addFeedback(menu.x, menu.y - 40, "止血正確 +100", "#f1c40f");
                                         menu.target.data.isBleeding = false;
                                         menu.target.tourniquetTimer = null;
                                         addFeedback(menu.x, menu.y, "止血成功", "#2ecc71");
@@ -1085,8 +1232,10 @@
                                 menu.active = false; menu.mode = 'main'; return;
                             }
                             if (clickX >= menuX - 20 && clickX <= menuX + 100 && clickY >= menuY + 20 && clickY <= menuY + 45) {
+                                statsTracker.current.airway.total++; // 總嘗試次數
                                 if (menu.target && menu.target.data) {
                                     if (menu.target.data.resp === '無') {
+                                        setScore(prev => prev + 100);
                                         if (Math.random() > 0.5) {
                                             menu.target.data.resp = '恢復 (微弱)';
                                             menu.target.data.severity = 'red';
@@ -1105,6 +1254,10 @@
                         }
                         else if (menu.mode === 'hazard_fire') {
                             if (clickX >= menuX - 10 && clickX <= menuX + 90 && clickY >= menuY && clickY <= menuY + 40) {
+                                if (state.firefightingSquads.length > 0) {
+                                    addFeedback(menu.x, menu.y, "消防隊忙碌中", "#e74c3c");
+                                    menu.active = false; menu.mode = 'main'; return;
+                                }
                                 if (!menu.target.beingExtinguished) {
                                     menu.target.beingExtinguished = true;
                                     state.firefightingSquads.push({
@@ -1117,6 +1270,10 @@
                         }
                         else if (menu.mode === 'hazard_vehicle') {
                             if (clickX >= menuX - 10 && clickX <= menuX + 90 && clickY >= menuY && clickY <= menuY + 40) {
+                                if (state.rescueSquads.length > 0) {
+                                    addFeedback(menu.x, menu.y, "破壞小組忙碌中", "#e74c3c");
+                                    menu.active = false; menu.mode = 'main'; return;
+                                }
                                 if (!menu.target.isBreached && menu.target.breakTimer === 0) {
                                     // 修改: 檢查是否已有小組，若無則派遣
                                     const alreadyDispatched = state.rescueSquads.some(s => s.target === menu.target);
@@ -1141,7 +1298,7 @@
                             const radioX = menu.x - 50;
                             const radioY = menu.y - 120;
                             const menuW = 100;
-                            const menuH = 100;
+                            const menuH = 130;
                             const btnH = 25;
                             const gap = 5;
                             const btnW = menuW - 10;
@@ -1256,13 +1413,64 @@
                                 }
                                 menu.active = false; menu.mode = 'main'; return;
                             }
+                            // ★★★ 新增：4. 請求搬運人員 (扣 MP 10) ★★★
+                            // Y軸位置：從第3個按鈕下方開始 (btnH * 3 + gap * 3)
+                            if (clickX >= startX && clickX <= startX + btnW && clickY >= startY + btnH * 3 + gap * 3 && clickY <= startY + btnH * 4 + gap * 3) {
+                                // 限制：最多 2 組 (自動生成的也會算在內)
+                                if (state.npcGroups.length >= 2) {
+                                    addFeedback(menu.x, menu.y, "搬運人力已達上限 (2組)", "#e74c3c");
+                                    menu.active = false; menu.mode = 'main'; return;
+                                }
+                                // 搜尋一個：已檢傷(紅黃黑) + 未移動 + 未抵達 + 無人搬運 + 無受困/已破壞 + 安全(無火)
+                                const unassignedTargets = state.survivors.filter(s =>
+                                    s.triageTag &&
+                                    ['red', 'yellow', 'black'].includes(s.triageTag) &&
+                                    !s.isEvacuating &&
+                                    !s.hasArrived &&
+                                    !s.isBeingCarried &&
+                                    !state.npcGroups.some(g => g.target === s) &&
+                                    (!s.trappedInVehicle || s.trappedInVehicle.isBreached) &&
+                                    !state.hazards.some(h => Math.hypot(s.x - h.x, s.y - h.y) < h.r + 30)
+                                );
+                                if (unassignedTargets.length > 0) {
+                                    if (state.stats.mp >= 10) {
+                                        state.stats.mp = Math.max(0, state.stats.mp - 10);
 
-                            // 如果點擊了選單以外的地方...
-                            if (menu.target === state.player && (clickX < radioX || clickX > radioX + menuW || clickY < radioY || clickY > radioY + menuH)) {
+                                        // 優先順序排序 (黑 > 紅 > 黃)
+                                        unassignedTargets.sort((a, b) => {
+                                            const p = { 'black': 3, 'red': 2, 'yellow': 1 };
+                                            return p[b.triageTag] - p[a.triageTag];
+                                        });
+                                        const target = unassignedTargets[0];
+
+                                        // 派遣搬運小組 (從左側出現)
+                                        state.npcGroups.push({
+                                            leaderX: 20 + 700, leaderY: 600,
+                                            followerX: 0 + 700, followerY: 600,
+                                            target: target,
+                                            state: 'moving_to_target',
+                                            carrying: false
+                                        });
+
+                                        addFeedback(menu.x, menu.y - 70, "-10 MP (搬運人員)", "#3498db");
+                                        addFeedback(menu.x, menu.y, "增派搬運人員支援", "#9b59b6");
+                                    } else {
+                                        addFeedback(menu.x, menu.y, "MP不足!", "#e74c3c");
+                                    }
+                                } else {
+                                    addFeedback(menu.x, menu.y, "目前無傷患需搬運", "#bdc3c7");
+                                }
                                 menu.active = false; menu.mode = 'main'; return;
                             }
                         }
+                        // 如果點擊了選單以外的地方...
+                        if (menu.target === state.player && (clickX < radioX || clickX > radioX + menuW || clickY < radioY || clickY > radioY + menuH)) {
+                            menu.active = false; menu.mode = 'main'; return;
+                        }
+
                     }
+
+
 
                     const interactRadius = 60;
                     let clickedSomething = false;
@@ -1610,7 +1818,7 @@
                         const radioX = menu.x - 50; // 往左移 50px
                         const radioY = menu.y - 120; // 往上移更多 (menu.y - 60 剛好是 my，所以這裡設定 -120 讓它高出 mx/my 60px)
                         const menuW = 100;
-                        const menuH = 100;
+                        const menuH = 130;
                         const btnH = 25;
                         const gap = 5;
                         const btnW = menuW - 10;
@@ -1636,6 +1844,10 @@
                         const btn3Y = btn2Y + btnH + gap;
                         ctx.fillStyle = '#e67e22'; ctx.fillRect(radioX + 5, btn3Y, btnW, btnH);
                         ctx.fillStyle = 'white'; ctx.fillText("請求破壞小組", radioX + menuW / 2, btn3Y + btnH / 2);
+                        // ★★★ 新增：4. 請求搬運人員按鈕 (紫色) ★★★
+                        const btn4Y = btn3Y + btnH + gap;
+                        ctx.fillStyle = '#9b59b6'; ctx.fillRect(radioX + 5, btn4Y, btnW, btnH);
+                        ctx.fillStyle = 'white'; ctx.fillText("請求搬運人員", radioX + menuW / 2, btn4Y + btnH / 2);
                     }
                 };
 
@@ -2019,9 +2231,17 @@
 
                     const p = state.player;
                     state.frameCount++;
+                    // ★★★ 新增：搬運系統冷卻倒數 (放在 update 函式前方) ★★★
+                    if (state.carrySystemCooldown > 0) {
+                        state.carrySystemCooldown--;
+                    }
                     // ★★★ 新增：救護車冷卻時間倒數 ★★★
                     if (state.ambulanceCooldown > 0) {
                         state.ambulanceCooldown--;
+                    }
+                    // ★★★ 新增：大聲公冷卻倒數 ★★★
+                    if (state.megaphoneCooldown > 0) {
+                        state.megaphoneCooldown--;
                     }
                     // --- 新增：計算目的地 (地墊中心隨機點 或 消防車後方) ---
                     const getTriageDest = (tag) => {
@@ -2223,7 +2443,7 @@
                     );
 
                     // 限制場上同時存在的搬運組上限 (例如 5 組)，避免太亂
-                    if (unassignedTargets.length > 0 && state.npcGroups.length < 5) {
+                    if (unassignedTargets.length > 0 && state.npcGroups.length < 1) {
                         // 簡單的冷卻時間，避免同一幀生成所有人 (利用 frameCount)
                         if (state.frameCount % 60 === 0) {
                             // 優先處理紅卡 (雖然 filter 已經篩選過，這裡取第一個即可)
@@ -2295,6 +2515,9 @@
 
                             if (dist < 10) {
                                 if (isGoingToDecon) {
+                                    if (group.target.data.isContaminated) {
+                                        statsTracker.current.deconCount++;
+                                    }
                                     // --- Case A: 抵達除汙區 ---
                                     group.target.data.isContaminated = false; // 清除汙染狀態
                                     addFeedback(group.leaderX, group.leaderY, "已除汙", "#95a5a6");
@@ -2315,6 +2538,7 @@
                                     group.carrying = false;
                                     group.state = 'searching';
                                     checkTriageCounts(); // 搬運完成後檢查計數 
+                                    state.carrySystemCooldown = 1200;
                                 }
                             } else {
                                 // 移動邏輯 (保持不變)
@@ -2465,6 +2689,17 @@
                             if (newHp > state.stats.hp) {
                                 state.stats.hp = newHp;
                                 addFeedback(p.x, p.y - 60, "+1 HP (指揮站)", "#2ecc71");
+
+                            }
+
+                        }
+                        // 2. ★★★ 新增 MP 恢復：每 60 幀 (約 1 秒) 恢復 1 點 ★★★
+                        if (state.frameCount % 60 === 0) {
+                            const newMp = Math.min(state.stats.maxMp, state.stats.mp + 1);
+                            if (newMp > state.stats.mp) {
+                                state.stats.mp = newMp;
+                                // 提示位置稍微往上 (y - 80)，避免與 HP 提示重疊，使用藍色 (#3498db)
+                                addFeedback(p.x, p.y - 80, "+1 MP (指揮站)", "#3498db");
                             }
                         }
                         // 並且加速恢復 SP (耐力)
@@ -2758,16 +2993,102 @@
                     window.removeEventListener('keyup', handleKeyUp);
                     canvas.removeEventListener('click', handleCanvasClick);
                     canvas.removeEventListener('contextmenu', handleContextMenu);
-                    // 新增：移除監聽 // 移除 mousemove
+                    // 移除監聽 // 移除 mousemove
                     window.removeEventListener('mousemove', handleMouseMove);
                     cancelAnimationFrame(state.animationFrameId);
                 };
             }, [gameOver]);
+            useEffect(() => {
+                if (gameOver) return;
 
+                // 計算目前各項進度
+                const placedCount = Object.values(triageCounts).reduce((a, b) => a + b, 0);
+                const currentEvacuatedCount = gameState.current.survivors.filter(s => s.onAmbulance).length;
+                const deadCount = gameState.current.survivors.filter(s => s.triageTag === 'black').length;
+
+                // 判斷條件：
+                // 1. 檢傷人數 = 總人數
+                // 2. 安置人數 = 總人數
+                // 3. 後送人數 + 死亡人數 = 總人數 (因黑卡無法後送，故將死亡視為此項已處理)
+                const isTriageDone = survivorCount >= totalSurvivors;
+                const isPlacementDone = placedCount >= totalSurvivors;
+                const isEvacDone = (currentEvacuatedCount + deadCount) >= totalSurvivors;
+
+                // 只要三個 OBJ 都完成，就觸發 Mission Complete
+                if (isTriageDone && isPlacementDone && isEvacDone) {
+                    setMissionComplete(true);
+
+                    // --- 計算詳細結算數據 ---
+                    const survivors = gameState.current.survivors;
+
+                    // 1. 檢傷正確率
+                    const triageStats = {
+                        green: { correct: 0, total: 0 },
+                        yellow: { correct: 0, total: 0 },
+                        red: { correct: 0, total: 0 },
+                        black: { correct: 0, total: 0 }
+                    };
+
+                    // 4. 除汙統計
+                    let totalContaminated = 0;
+
+                    // 5. 紅色優先後送統計
+                    let totalInitialReds = 0;
+                    let evacuatedReds = 0;
+
+                    survivors.forEach(s => {
+                        // 檢傷統計 (比較 最終貼的標籤 vs 當前實際傷情)
+                        // 注意：如果傷患死亡，實際傷情會變為 black，若玩家貼 black 算正確
+                        const actual = s.data.severity;
+                        const tagged = s.triageTag;
+
+                        if (triageStats[actual]) {
+                            triageStats[actual].total++;
+                            if (tagged === actual) {
+                                triageStats[actual].correct++;
+                            }
+                        }
+
+                        // 除汙統計
+                        if (s.data.wasContaminated) {
+                            totalContaminated++;
+                        }
+
+                        // 紅色優先統計
+                        // 邏輯：計算有多少「初始為紅色」的傷患，最終成功被後送
+                        if (s.data.initialSeverity === 'red') {
+                            totalInitialReds++;
+                            if (s.onAmbulance) {
+                                evacuatedReds++;
+                            }
+                        }
+                    });
+
+                    // 2. 遊戲時間
+                    const timeSeconds = Math.floor(gameState.current.frameCount / 60);
+
+                    // 3. 治療正確率 (止血 + 呼吸道 合併計算)
+                    const treatTotal = statsTracker.current.tourniquet.total + statsTracker.current.airway.total;
+                    const treatCorrect = statsTracker.current.tourniquet.correct + statsTracker.current.airway.correct;
+
+                    setResultStats({
+                        triage: triageStats,
+                        timeSeconds: timeSeconds,
+                        treatment: { correct: treatCorrect, total: treatTotal },
+                        decon: { correct: statsTracker.current.deconCount, total: totalContaminated },
+                        redEvac: { correct: evacuatedReds, total: totalInitialReds }
+                    });
+                }
+            }, [survivorCount, triageCounts, evacuatedCount, gameOver, updateCount]); // 當檢傷數或安置數變化時檢查
+
+            const getPct = (correct, total) => {
+                if (total === 0) return "100%"; // 若無該類別傷患，視為滿分
+                return Math.round((correct / total) * 100) + "%";
+            };
             return (
                 <div className="flex justify-center items-center h-screen bg-[#050505] text-white overflow-hidden font-mono relative">
                     <div className="relative shadow-[0_0_50px_rgba(0,0,20,0.5)] border-2 border-[#333] bg-[#111]">
-                        <canvas ref={canvasRef} className="block image-pixelated cursor-crosshair" />
+                        <canvas ref={canvasRef} className="block image-pixelated cursor-default" />
 
                         {gameOver && (
                             <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-50 animate-fade-in">
@@ -2786,7 +3107,82 @@
                                 </button>
                             </div>
                         )}
-                        {/* ★★★ 新增：檢傷平板浮動視窗 (靠右顯示) ★★★ */}
+                        {/* ★★★ 修改：Mission Complete 結算畫面 ★★★ */}
+                        {missionComplete && resultStats && (
+                            <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[100] animate-fade-in backdrop-blur-md p-8">
+                                <h1 className="text-5xl text-yellow-400 font-bold mb-2 tracking-widest drop-shadow-[0_0_20px_rgba(253,224,71,0.6)]" style={{ fontFamily: 'Impact, sans-serif' }}>
+                                    MISSION COMPLETE
+                                </h1>
+                                <div className="text-gray-400 mb-6 text-sm">任務耗時: {Math.floor(resultStats.timeSeconds / 60)}分 {resultStats.timeSeconds % 60}秒</div>
+
+                                <div className="grid grid-cols-2 gap-x-12 gap-y-6 w-full max-w-4xl">
+                                    {/* 1. 檢傷正確率面板 */}
+                                    <div className="bg-gray-800/50 p-6 rounded-lg border border-gray-700">
+                                        <h3 className="text-xl font-bold text-blue-400 mb-4 border-b border-gray-600 pb-2">檢傷正確率</h3>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-green-500"></span> 綠色輕傷</div>
+                                                <div className="font-mono text-lg">{getPct(resultStats.triage.green.correct, resultStats.triage.green.total)} <span className="text-xs text-gray-500">({resultStats.triage.green.correct}/{resultStats.triage.green.total})</span></div>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-yellow-500"></span> 黃色中傷</div>
+                                                <div className="font-mono text-lg">{getPct(resultStats.triage.yellow.correct, resultStats.triage.yellow.total)} <span className="text-xs text-gray-500">({resultStats.triage.yellow.correct}/{resultStats.triage.yellow.total})</span></div>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-600"></span> 紅色重傷</div>
+                                                <div className="font-mono text-lg">{getPct(resultStats.triage.red.correct, resultStats.triage.red.total)} <span className="text-xs text-gray-500">({resultStats.triage.red.correct}/{resultStats.triage.red.total})</span></div>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-gray-500"></span> 黑色死亡</div>
+                                                <div className="font-mono text-lg">{getPct(resultStats.triage.black.correct, resultStats.triage.black.total)} <span className="text-xs text-gray-500">({resultStats.triage.black.correct}/{resultStats.triage.black.total})</span></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 右側欄：其他統計 */}
+                                    <div className="space-y-6">
+                                        {/* 3. 處置正確率 */}
+                                        <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                                            <h3 className="text-lg font-bold text-yellow-400 mb-2">急救處置正確率</h3>
+                                            <div className="text-sm text-gray-400 mb-1">(止血帶 / 暢通呼吸道)</div>
+                                            <div className="flex justify-between items-end">
+                                                <div className="text-3xl font-bold text-white">{getPct(resultStats.treatment.correct, resultStats.treatment.total)}</div>
+                                                <div className="text-gray-500">操作: {resultStats.treatment.correct}/{resultStats.treatment.total}</div>
+                                            </div>
+                                        </div>
+
+                                        {/* 4. 除汙正確率 */}
+                                        <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                                            <h3 className="text-lg font-bold text-purple-400 mb-2">傷患除汙完成率</h3>
+                                            <div className="flex justify-between items-end">
+                                                <div className="text-3xl font-bold text-white">{getPct(resultStats.decon.correct, resultStats.decon.total)}</div>
+                                                <div className="text-gray-500">已除汙: {resultStats.decon.correct}/{resultStats.decon.total}</div>
+                                            </div>
+                                        </div>
+
+                                        {/* 5. 紅色優先後送率 */}
+                                        <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                                            <h3 className="text-lg font-bold text-red-400 mb-2">紅色傷患優先後送率</h3>
+                                            <div className="text-sm text-gray-400 mb-1">(成功存活並送醫的重傷患)</div>
+                                            <div className="flex justify-between items-end">
+                                                <div className="text-3xl font-bold text-white">{getPct(resultStats.redEvac.correct, resultStats.redEvac.total)}</div>
+                                                <div className="text-gray-500">成功後送: {resultStats.redEvac.correct}/{resultStats.redEvac.total}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 完成按鈕  */}
+
+                                <button
+                                    onClick={handleRestart}
+                                    className="px-12 py-4 bg-yellow-500 hover:bg-yellow-400 text-black text-2xl font-black rounded shadow-[0_0_30px_rgba(234,179,8,0.4)] transform hover:scale-105 transition-all duration-200"
+                                >
+                                    重新開始
+                                </button>
+                            </div>
+                        )}
+                        {/* ★★★ 檢傷平板浮動視窗 (靠右顯示) ★★★ */}
                         {showTabletUI && (
                             <>
                                 {/* 左側：救護車調度列表 */}
@@ -2840,7 +3236,7 @@
                                                         w: 100, h: 50, angle: 0
                                                     });
 
-                                                    setSurvivorCount(prev => prev + 1); // 強制重繪
+                                                    forceUpdate(prev => prev + 1); // 強制重繪
                                                     state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "-30 MP (小巴支援)", color: "#f1c40f", life: 60, vy: -0.5 });
                                                 } else {
                                                     alert("MP不足 (需 30)！");
@@ -2903,6 +3299,19 @@
                                                     if (!selectedPatient) return;
 
                                                     if (canLoad(selectedPatient.triageTag)) {
+                                                        if (selectedPatient.triageTag === 'red') {
+                                                            setScore(prev => prev + 500);
+                                                            // 手動推入 feedback (因為此處在 useEffect 外)
+                                                            gameState.current.feedbacks.push({
+                                                                x: gameState.current.player.x,
+                                                                y: gameState.current.player.y - 50,
+                                                                text: "優先後送紅色 +500",
+                                                                color: "#f1c40f",
+                                                                life: 60,
+                                                                vy: -0.5
+                                                            });
+                                                        }
+
                                                         veh.passengers.push(selectedPatient.triageTag);
                                                         selectedPatient.onAmbulance = true;
                                                         setSelectedPatient(null);
@@ -2925,7 +3334,7 @@
                                                         if (shouldDepart) {
                                                             veh.state = 'departing';
                                                         }
-                                                        setSurvivorCount(prev => prev);
+                                                        forceUpdate(prev => prev + 1);
                                                     } else {
                                                         if (veh.type === 'mini_bus') {
                                                             alert("小巴只能載送綠色輕傷患者 (上限8人)！");
@@ -2939,7 +3348,7 @@
                                                     e.stopPropagation();
                                                     if (veh.passengers.length > 0) {
                                                         veh.state = 'departing';
-                                                        setSurvivorCount(prev => prev);
+                                                        forceUpdate(prev => prev + 1);
                                                     }
                                                 };
 
@@ -3104,15 +3513,27 @@
                         <div className="absolute top-3 left-3 pointer-events-none select-none">
                             <div className="bg-black/60 p-1.5 mb-1 backdrop-blur-sm border-l-2 border-[#e74c3c] inline-block">
                                 <h1 className="text-sm m-0 text-[#e74c3c] font-bold flex items-center gap-2 tracking-wide">
-                                    <IconAlert /> HIGHWAY PILE-UP
+                                    <IconAlert /> MCI 模擬演練
+                                    <span className="text-yellow-400 ml-4 font-mono text-base">Score: {score}</span>
                                 </h1>
                             </div>
                             <div className="bg-black/80 p-2 border-l-2 border-orange-500 text-gray-200 text-xs w-[220px] shadow-lg">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <IconMapPin /> <span className="text-gray-400">LOC:</span> 國道一號 35KM
-                                </div>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <IconActivity /> <span className="text-gray-400">OBJ:</span> 搜尋 ({survivorCount}/{totalSurvivors})
+                                <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
+                                    {/* 第一列：OBJ 標籤 與 檢傷人數 */}
+                                    <div className="flex items-center gap-2 text-gray-400">
+                                        <IconActivity /> <span>OBJ:</span>
+                                    </div>
+                                    <div>檢傷人數 ({survivorCount}/{totalSurvivors})</div>
+                                    <div>檢傷人數 ({survivorCount}/{totalSurvivors})</div>
+
+                                    {/* 第二列：編號 1. 與 安置人數 */}
+                                    <div className="text-right text-gray-400">1.</div>
+                                    <div>安置人數 ({Object.values(triageCounts).reduce((a, b) => a + b, 0)}/{totalSurvivors})</div>
+
+                                    {/* 第三列：編號 2. 與 後送人數 */}
+                                    <div className="text-right text-gray-400">2.</div>
+                                    <div>後送人數 ({gameState.current.survivors.filter(s => s.onAmbulance).length}/{totalSurvivors})</div>
+
                                 </div>
                             </div>
                             <div className="mt-2 w-[150px] flex flex-col gap-1">
@@ -3137,7 +3558,11 @@
                             </div>
                         </div>
                         {/* ★★★ 新增：右上角遊戲音樂混音器/開關 ★★★ */}
-                        <div className="absolute top-3 right-3 z-50 pointer-events-auto">
+                        <div className="absolute top-3 right-3 z-50 pointer-events-auto flex items-center gap-4">
+                            {/* ★★★ 操作說明文字 (透明背景) ★★★ */}
+                            <div className="text-white/90 text-xs font-bold tracking-wide select-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] hidden xl:block">
+                                操作說明:鍵盤←↓ ↑→ &nbsp;&nbsp; 互動:E鍵或滑鼠左鍵 &nbsp;&nbsp; 道具欄:I鍵 &nbsp;&nbsp; 取消:C鍵或滑鼠右鍵
+                            </div>
                             <button
                                 onClick={toggleAudio}
                                 className={`
@@ -3163,8 +3588,8 @@
                                 )}
                             </button>
                         </div>
-                        {/* --- 修改：道具欄移至此處 (外層黑色區域) --- */}
-                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 pointer-events-auto select-none z-50">
+                        {/* --- 道具欄移至此處 (外層黑色區域) --- */}
+                        <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 pointer-events-auto select-none z-50 transition-opacity duration-300 ${showInventory ? 'opacity-100' : 'opacity-0'}`}>
                             <div className="flex gap-1 bg-black/80 p-2 border border-gray-600 rounded-md shadow-[0_0_15px_rgba(0,0,0,0.8)]">
                                 {items.map((item, i) => (
                                     <div
