@@ -3,9 +3,9 @@
 
 <head>
     <meta charset="UTF-8">
-    <link 
-    href="[https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap](https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap)" 
-    rel="stylesheet">
+    <link
+        href="[https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap](https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap)"
+        rel="stylesheet">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>MCI模擬</title>
@@ -1154,7 +1154,7 @@
             };
 
             useEffect(() => {
-               if (!gameStarted || gameOver || !canvasRef.current) return;
+                if (!gameStarted || gameOver || !canvasRef.current) return;
 
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
@@ -3856,7 +3856,7 @@
                     window.removeEventListener('mousemove', handleMouseMove);
                     cancelAnimationFrame(state.animationFrameId);
                 };
-           }, [gameOver, gameStarted]); 
+            }, [gameOver, gameStarted]);
             useEffect(() => {
                 if (gameOver) return;
 
@@ -4209,7 +4209,14 @@
                                                 const state = gameState.current;
                                                 // 1. 檢查冷卻
                                                 if (state.ambulanceCooldown > 0) {
-                                                    alert(`調度冷卻中 (${Math.ceil(state.ambulanceCooldown / 60)}s)`);
+                                                    state.feedbacks.push({
+                                                        x: state.player.x,
+                                                        y: state.player.y - 50,
+                                                        text: `調度冷卻中 (${Math.ceil(state.ambulanceCooldown / 60)}s)`,
+                                                        color: "#bdc3c7",
+                                                        life: 60,
+                                                        vy: -0.5
+                                                    });
                                                     return;
                                                 }
                                                 // 2. 檢查待命區
