@@ -3,12 +3,27 @@
 
 <head>
     <meta charset="UTF-8">
-    <link
-        href="[https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap](https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap)"
-        rel="stylesheet">
+    <!-- Google SEO 搜尋引擎優化設定  -->
+    <meta name="description" content="MCI (Mass Casualty Incident) 大量傷患事件模擬演練系統。透過互動式遊戲學習 START 檢傷分類法 (Simple Triage and Rapid Treatment)，提升災難現場檢傷分類 (Triage) 與緊急處置能力。">
+    <meta name="keywords" content="MCI, triage, START, mass casualty incidents, 大量傷患, 檢傷分類, 災難模擬, 緊急醫療, EMT">
+    <meta name="author" content="MCI Simulation">
+     <!-- Google 搜尋與社群分享預覽圖片  -->
+    <meta property="og:image" content="https://jin28931343-stack.github.io/MCI/PIC/MIC_game3.png">
+    <meta name="image" content="https://jin28931343-stack.github.io/MCI/PIC/MIC_game3.png">
+    
+    <!-- Open Graph (社交媒體分享優化) -->
+    <meta property="og:title" content="MCI 大量傷患模擬演練">
+    <meta property="og:description" content="互動式大量傷患 (MCI) 檢傷分類 (Triage) 訓練模擬器。">
+    <meta property="og:type" content="website">
+
+    <!--  已更正為標準 URL -->
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
+    
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>MCI模擬</title>
+    
+    <!-- 標題 -->
+    <title>MCI 模擬 - 大量傷患檢傷分類 (Triage) 演練</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -16,50 +31,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        /* 確保移動設備在豎屏時強制橫屏 (最簡化且通用) */
-        @media only screen and (max-device-width: 1024px) and (orientation: portrait) {
-
-            /* 使用 vh/vw 來確保旋轉後填滿整個視口 */
-            html,
-            body {
-                width: 100%;
-                height: 100%;
-                margin: 0;
-                padding: 0;
-                overflow: hidden;
-            }
-
-            body {
-                /* 修改：使用 fixed 定位防止滾動與網址列造成的偏移 */
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                /* 使用 100vh/vw 確保填滿視口 */
-                width: 100vh;
-                height: 100vw;
-                /* 旋轉中心設為正中央 */
-                transform: translate(-50%, -50%) rotate(90deg);
-                transform-origin: center center;
-                visibility: visible;
-                z-index: 9999;
-                background-color: #050505;
-            }
-
-            /* 修改：強制內部容器填滿旋轉後的 body 並置中 */
-            #root,
-            .flex.justify-center.items-center.h-screen {
-                width: 100% !important;
-                height: 100% !important;
-                position: absolute !important;
-                top: 0;
-                left: 0;
-                margin: 0;
-                /* 確保 Flex 屬性生效 */
-                display: flex;
-                justify-content: center;
-                align-items: center;
-            }
-        }
+        
 
         body {
             margin: 0;
@@ -4263,7 +4235,7 @@
                                             }}
                                             className="px-2 py-1 bg-yellow-600 hover:bg-yellow-500 text-white text-xs rounded shadow transition border border-yellow-400"
                                         >
-                                            呼叫小巴支援 (-30MP)
+                                            呼叫小型巴士支援 (-30MP)
                                         </button>
                                     </div>
                                     <div className="space-y-3">
@@ -4580,7 +4552,7 @@
                         <div className="absolute top-3 right-3 z-50 pointer-events-auto flex items-center gap-4">
                             {/* ★★★ 操作說明文字 (透明背景) ★★★ */}
                             <div className="text-white/90 text-xs font-bold tracking-wide select-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] hidden xl:block">
-                                操作說明:鍵盤←↓ ↑→ &nbsp;&nbsp; 互動:E鍵或滑鼠左鍵 &nbsp;&nbsp; 道具欄:I鍵 &nbsp;&nbsp; 取消:C鍵或滑鼠右鍵
+                                Simple Triage And Rapid Treatment操作說明:鍵盤←↓ ↑→ &nbsp;&nbsp; 互動:E鍵或滑鼠左鍵 &nbsp;&nbsp; 道具欄:I鍵 &nbsp;&nbsp; 取消:C鍵或滑鼠右鍵
                             </div>
                             <button
                                 onClick={toggleAudio}
