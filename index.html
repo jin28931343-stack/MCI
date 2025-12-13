@@ -54,6 +54,10 @@
             overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             user-select: none;
+            -webkit-user-select: none;
+            /* Safari */
+            touch-action: none;
+            /* 禁止預設觸控行為，防止畫面滑動 */
         }
 
         canvas {
@@ -115,6 +119,91 @@
             animation-delay: 0.3s;
         }
 
+        /* ★★★ 虛擬搖桿 UI ★★★ */
+        .joystick-zone {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            width: 150px;
+            height: 150px;
+            z-index: 100;
+            touch-action: none;
+        }
+
+        .joystick-base {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            position: relative;
+        }
+
+        .joystick-knob {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.8);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ★★★ 手機版功能按鈕 ★★★ */
+        .mobile-btn {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+            touch-action: manipulation;
+            user-select: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .mobile-btn:active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(0.95);
+        }
+
+        .btn-interact {
+            bottom: 40px;
+            right: 40px;
+            border-color: #f1c40f;
+            color: #f1c40f;
+        }
+
+        .btn-cancel {
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-color: #e74c3c;
+            color: #e74c3c;
+        }
+
+        .btn-inventory {
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 50px;
+            border-color: #3498db;
+            color: #3498db;
+        }
+
         /* ★★★ 自定義像素箭頭鼠標 CSS ★★★ */
         .cursor-pixel {
             /* 使用 SVG Data URI 繪製像素風格箭頭 (白底黑邊) */
@@ -147,6 +236,7 @@
             const [updateCount, forceUpdate] = useState(0);
             // ★★★  Ref 來追蹤 selectedSlot，解決 Event Listener 讀不到最新狀態的問題 ★★★
             const selectedSlotRef = useRef(selectedSlot);
+            const [showRadioPanel, setShowRadioPanel] = useState(false);
             // ★★★ 必須加入此 useEffect，讓 Ref 跟隨 State 更新★★★
             useEffect(() => {
                 selectedSlotRef.current = selectedSlot;
@@ -163,9 +253,85 @@
             const schedulerTimerRef = useRef(null);
             const sequenceStepRef = useRef(0);
             const [score, setScore] = useState(0);
+            // ★★★ 虛擬搖桿與按鈕 Ref ★★★
+            const joystickRef = useRef({ active: false, identifier: null, baseX: 0, baseY: 0, vecX: 0, vecY: 0 });
+            const [joystickUI, setJoystickUI] = useState({ x: 0, y: 0, active: false });
+            // 用於將 useEffect 內部的 handler 暴露給外部 JSX 使用
+            const keyDownHandlerRef = useRef(null);
+            const cancelActionRef = useRef(null);
             // 同步靜音狀態到 Ref
             useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+            const handleJoystickTouchStart = (e) => {
+                e.preventDefault();
+                const touch = e.changedTouches[0];
+                const rect = e.currentTarget.getBoundingClientRect();
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
 
+                joystickRef.current = {
+                    active: true,
+                    identifier: touch.identifier,
+                    baseX: centerX,
+                    baseY: centerY,
+                    vecX: 0,
+                    vecY: 0
+                };
+                setJoystickUI({ x: 0, y: 0, active: true });
+            };
+            const handleJoystickTouchEnd = (e) => {
+                e.preventDefault();
+                joystickRef.current = { ...joystickRef.current, active: false, vecX: 0, vecY: 0 };
+                setJoystickUI({ x: 0, y: 0, active: false });
+            };
+            const handleJoystickTouchMove = (e) => {
+                e.preventDefault();
+                if (!joystickRef.current.active) return;
+
+                const touchList = e.changedTouches;
+                let touch = null;
+                // 尋找對應的 touch ID
+                for (let i = 0; i < touchList.length; i++) {
+                    if (touchList[i].identifier === joystickRef.current.identifier) {
+                        touch = touchList[i];
+                        break;
+                    }
+                }
+                if (!touch) return;
+
+                const rect = e.currentTarget.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+
+                // 計算相對於搖桿中心的偏移量
+                let dx = touch.clientX - centerX;
+                let dy = touch.clientY - centerY;
+
+                const maxDist = 35; // 搖桿最大移動半徑
+                const dist = Math.hypot(dx, dy);
+
+                // 限制在圓形範圍內
+                if (dist > maxDist) {
+                    const ratio = maxDist / dist;
+                    dx *= ratio;
+                    dy *= ratio;
+                }
+
+                // 更新 UI 位置
+                setJoystickUI({ x: dx, y: dy, active: true });
+
+                // 更新邏輯向量 (歸一化 -1 ~ 1)供遊戲迴圈使用
+                joystickRef.current.vecX = dx / maxDist;
+                joystickRef.current.vecY = dy / maxDist;
+            };
+            // ★★★ 模擬按鍵觸發 (給 UI 按鈕用) ★★★
+            const triggerKey = (keyName) => {
+                if (keyDownHandlerRef.current) {
+                    keyDownHandlerRef.current({ key: keyName, preventDefault: () => { } });
+                }
+            };
+            const triggerCancel = () => {
+                if (cancelActionRef.current) cancelActionRef.current();
+            };
             // ★★★ 初始化音訊環境 (8-bit Synth) ★★★
             const initAudio = () => {
                 if (!audioCtxRef.current) {
@@ -342,7 +508,7 @@
                 rescueSquads: [], // 破壞救援小組陣列
                 staticNpcs: [],
                 interactionMenu: {
-                    active: false, x: 0, y: 0, target: null, mode: 'main'
+                    active: false, x: 0, y: 0, target: null, mode: 'main', selectedIndex: 0
                 },
                 placementMode: {
                     active: false,
@@ -356,9 +522,6 @@
                 carrySystemCooldown: 0,
                 ambulanceCooldown: 0, // 救護車呼叫冷卻時間
                 megaphoneCooldown: 0,
-                interactionMenu: {
-                    active: false, x: 0, y: 0, target: null, mode: 'main'
-                },
                 survivorsFoundCount: 0,
                 animationFrameId: null,
                 frameCount: 0,
@@ -366,38 +529,33 @@
             });
 
             const items = [
-                { name: "無線電", color: "#34495e", type: "radio" },        // 1
-                { name: "檢傷平板", color: "#9b59b6", type: "tablet" },       // 2
-                { name: "檢傷地墊", color: "#27ae60", type: "mat" },          // 3
-                { name: "指揮站", color: "#ffffff", type: "command_post" }, // 4
-                { name: "除汙站", color: "#95a5a6", type: "decon" },        // 5
-                { name: "救護車待命區", color: "#3498db", type: "ambulance_staging" },//6 
-                { name: "大聲公", color: "#e67e22", type: "megaphone" }, // 7
+                { name: "無線電", color: "#34495e", type: "radio", imgSrc: "PIC/radio.png" },        // 1
+                { name: "檢傷平板", color: "#9b59b6", type: "tablet", imgSrc: "PIC/tablet.png" },       // 2
+                { name: "檢傷地墊", color: "#27ae60", type: "mat", imgSrc: "PIC/mat.png" },          // 3
+                { name: "指揮站", color: "#ffffff", type: "command_post", imgSrc: "PIC/command_post.png" }, // 4
+                { name: "除汙站", color: "#95a5a6", type: "decon", imgSrc: "PIC/decon.png" },        // 5
+                { name: "救護車待命區", color: "#3498db", type: "ambulance_staging", imgSrc: "PIC/ambulance_staging.png" },//6 
+                { name: "大聲公", color: "#e67e22", type: "megaphone", imgSrc: "PIC/megaphone.png" }, // 7
             ];
 
 
             const handleSlotClick = (index) => {
                 const item = items[index];
-                if (selectedSlot === index) {
-                    // 如果點擊的是當前選中的欄位，則取消選中
+                if (selectedSlotRef.current === index) {
                     setSelectedSlot(-1);
                     setShowMatSelector(false);
-                    // ★★★取消選中時關閉平板 ★★★
                     setShowTabletUI(false);
-                    setSelectedPatient(null); // 清除選中傷患
+                    setShowRadioPanel(false); // 關閉無線電面板
+                    setSelectedPatient(null);
                     gameState.current.placementMode.active = false;
-                    // 如果是無線電，也取消無線電選單
-                    if (gameState.current.interactionMenu.mode === 'radio') {
-                        gameState.current.interactionMenu.active = false;
-                        gameState.current.interactionMenu.mode = 'main';
-                    }
-
+                    // (移除舊的 interactionMenu 清除邏輯，因為不再使用了)
                     return;
                 }
                 if (!item) return;
                 else if (item.type === 'megaphone') {
                     setShowMatSelector(false);
                     setShowTabletUI(false);
+                    setShowRadioPanel(false);
                     gameState.current.placementMode.active = false;
                     gameState.current.interactionMenu.active = false;
 
@@ -511,7 +669,7 @@
                         setSelectedSlot(-1); // 取消當前選中的道具
                         return; // 中止後續放置邏輯
                     }
-                    setShowMatSelector(false);
+
                     // 設定特殊區塊的放置模式
                     gameState.current.placementMode = {
                         active: true,
@@ -523,29 +681,9 @@
                     };
 
                 } else if (item.type === 'radio') {
-                    // --- 無線電邏輯 ---
-                    setShowMatSelector(false);
-                    gameState.current.placementMode.active = false;
-                    // 1. 移除扣除 MP 邏輯：只開選單
-                    // gameState.current.stats.mp = Math.max(0, gameState.current.stats.mp - 10);
-                    // addFeedback(gameState.current.player.x, gameState.current.player.y - 70, "-10 MP (無線電)", "#3498db");
+                    setShowRadioPanel(true); // 開啟無線電面板
 
-                    // 2. 顯示無線電選單 (鎖定在角色身上)
-                    gameState.current.interactionMenu = {
-                        active: true,
-                        x: gameState.current.player.x, // 選單位置鎖定在玩家頭上
-                        y: gameState.current.player.y,
-                        target: gameState.current.player, // 讓選單跟著玩家移動
-                        mode: 'radio' // 新增無線電模式
-                    };
-                }
-                // --- 處理新工具點擊 ---
-                else if (['breaker_tool', 'extinguisher_tool'].includes(item.type)) {
-                    setShowMatSelector(false);
-                    setShowTabletUI(false);
-                    gameState.current.placementMode.active = false;
-                    gameState.current.interactionMenu.active = false;
-                    // ★★★ 修正: addFeedback 在此作用域無法使用，改為手動推入 feedbacks 陣列 ★★★
+                } else if (['breaker_tool', 'extinguisher_tool'].includes(item.type)) {
                     gameState.current.feedbacks.push({
                         x: gameState.current.player.x,
                         y: gameState.current.player.y - 50,
@@ -797,8 +935,8 @@
                 for (let i = 0; i < 30; i++) {
                     let type = Math.random() > 0.8 ? 'truck' : 'sedan';
                     // 生成範圍從 300 + LEFT_EXPANSION 開始
-                    let x = rand(300 + LEFT_EXPANSION, WORLD_WIDTH - 100);
-                    let y = rand(50, WORLD_HEIGHT - 50);
+                    let x = rand(300 + LEFT_EXPANSION, WORLD_WIDTH - 170);
+                    let y = rand(170, WORLD_HEIGHT - 170);
                     let rotated = Math.random() > 0.3;
                     let w = (type === 'sedan' ? (rotated ? 80 : 40) : (rotated ? 120 : 50));
                     let h = (type === 'sedan' ? (rotated ? 40 : 80) : (rotated ? 50 : 120));
@@ -847,33 +985,33 @@
                                 sy = car.y + rand(-60, car.h + 60);
                             } else {
                                 // 策略 B: 全地圖隨機
-                                sx = rand(300 + LEFT_EXPANSION, WORLD_WIDTH - 100);
-                                sy = rand(100, WORLD_HEIGHT - 100);
+                                sx = rand(300 + LEFT_EXPANSION, WORLD_WIDTH - 150);
+                                sy = rand(150, WORLD_HEIGHT - 150);
                             }
 
                             // 1. 基礎邊界檢查
-                            if (sx < 300 + LEFT_EXPANSION) sx = 300 + LEFT_EXPANSION;
-                            if (sx > WORLD_WIDTH - 20) sx = WORLD_WIDTH - 20;
-                            if (sy < 50) sy = 50;
-                            if (sy > WORLD_HEIGHT - 50) sy = WORLD_HEIGHT - 50;
+                            if (sx < 350 + LEFT_EXPANSION) sx = 350 + LEFT_EXPANSION;
+                            if (sx > WORLD_WIDTH - 150) sx = WORLD_WIDTH - 150;
+                            if (sy < 150) sy = 150;
+                            if (sy > WORLD_HEIGHT - 150) sy = WORLD_HEIGHT - 150;
 
                             // 2. 避開消防車作業淨空區
                             if (sx > ftClearanceZone.minX && sx < ftClearanceZone.maxX && sy > ftClearanceZone.minY && sy < ftClearanceZone.maxY) {
                                 continue;
                             }
 
-                            // 3. 【關鍵修改】碰撞檢測：檢查是否與任何車體重疊
+                            // 3. 【修正】碰撞檢測：加大判定邊距 (Margin)
+                            // 傷患繪製半徑約為 15~20px，設定 margin = 20 確保不會與車體重疊
                             let isOverlapping = false;
+                            const safeMargin = 20; // ★★★ 修改處：加大邊距 (原為 5) ★★★
+
                             for (let o of state.obstacles) {
                                 // 只檢查實體車輛與車輛阻擋塊
                                 if (o.type === 'sedan' || o.type === 'truck' || o.type === 'vehicle_block') {
-                                    // 簡單矩形碰撞檢測
-                                    // 為了視覺效果，我們保留一點點邊距 (margin)，避免傷患剛好「切」到車邊
-                                    const margin = 5;
-                                    if (sx > o.x - margin && sx < o.x + o.w + margin &&
-                                        sy > o.y - margin && sy < o.y + o.h + margin) {
+                                    if (sx > o.x - safeMargin && sx < o.x + o.w + safeMargin &&
+                                        sy > o.y - safeMargin && sy < o.y + o.h + safeMargin) {
                                         isOverlapping = true;
-                                        break; // 發現重疊，跳出檢查
+                                        break; // 發現重疊
                                     }
                                 }
                             }
@@ -903,18 +1041,56 @@
                 // --- 新增：取消功能的共用邏輯 ---
                 const cancelAction = () => {
                     let performed = false;
-                    // ★★★ 新增：按 C 或右鍵時關閉平板 ★★★
-                    if (showTabletUI) {
+                    if (selectedSlotRef.current !== -1) {
+                        setSelectedSlot(-1);        // 清除道具欄選中狀態
+                        setShowTabletUI(false);     // 關閉平板 UI
+                        setShowRadioPanel(false); // 關閉無線電
+                        setSelectedPatient(null);   // 清除平板選中的傷患
+                        setShowMatSelector(false);  // 關閉地墊選擇器
+
+                        // 強制關閉遊戲內的放置模式
+                        state.placementMode.active = false;
+
+                        // 如果是無線電選單，也強制關閉
+                        if (state.interactionMenu.mode === 'radio') {
+                            state.interactionMenu.active = false;
+                            state.interactionMenu.mode = 'main';
+                        }
+
+                        // ★★★改為手動推入 feedbacks 陣列，避免 addFeedback 導致當機 ★★★
+                        state.feedbacks.push({
+                            x: state.player.x,
+                            y: state.player.y - 50,
+                            text: "已取消道具",
+                            color: "#bdc3c7",
+                            life: 60,
+                            vy: -0.5
+                        });
+                        performed = true;
+                    }
+                    // ★★★ 按 C 或右鍵時關閉平板 ★★★
+                    if (showTabletUI || showRadioPanel) { // 加入 showRadioPanel 判斷
                         setShowTabletUI(false);
+                        setShowRadioPanel(false); // 關閉
                         setSelectedPatient(null);
-                        setSelectedSlot(-1);
+                        if (!performed && selectedSlotRef.current === -1) {
+                            setSelectedSlot(-1);
+                        }
                         performed = true;
                     }
                     // 1. 取消放置模式
                     if (state.placementMode.active) {
                         state.placementMode.active = false;
                         setShowMatSelector(false); // 確保UI關閉
-                        addFeedback(state.player.x, state.player.y - 50, "已取消設置", "#bdc3c7");
+                        // ★★★ 手動推入 feedback ★★★
+                        state.feedbacks.push({
+                            x: state.player.x,
+                            y: state.player.y - 50,
+                            text: "已取消設置",
+                            color: "#bdc3c7",
+                            life: 60,
+                            vy: -0.5
+                        });
                         performed = true;
                     }
                     // 2. 關閉互動選單
@@ -923,7 +1099,26 @@
                         state.interactionMenu.target = null;
                         state.interactionMenu.mode = 'main';
                         // 避免重複顯示提示
-                        if (!performed) addFeedback(state.player.x, state.player.y - 50, "已關閉選單", "#bdc3c7");
+                        if (!performed) {
+                            // ★★★ 修正：手動推入 feedback ★★★
+                            state.feedbacks.push({
+                                x: state.player.x,
+                                y: state.player.y - 50,
+                                text: "已關閉選單",
+                                color: "#bdc3c7",
+                                life: 60,
+                                vy: -0.5
+                            });
+                        }
+                    }
+                    // 3. 補強：確保平板 UI 關閉 (針對非道具選取開啟的情況，若有的話)
+                    if (showTabletUI) {
+                        setShowTabletUI(false);
+                        setSelectedPatient(null);
+                        if (!performed && selectedSlotRef.current === -1) {
+                            // 只有在還沒處理過時才執行，避免衝突
+                            setSelectedSlot(-1);
+                        }
                     }
                 };
                 // --- 新增：滑鼠右鍵處理 (取消) ---
@@ -932,37 +1127,114 @@
                     if (state.isGameOver) return;
                     cancelAction();
                 };
+                cancelActionRef.current = cancelAction;
                 const handleKeyDown = (e) => {
+                    const state = gameState.current;
                     if (state.isGameOver) return;
+
+                    const menu = state.interactionMenu;
+
+                    // ★★★ 新增：選單鍵盤導航邏輯 ★★★
+                    if (menu.active) {
+                        // 定義各模式的選項數量
+                        const getOptionCount = (mode) => {
+                            if (mode === 'main') return 2; // [檢傷, 醫療]
+                            if (mode === 'triage') return 5; // [綠, 黃, 紅, 黑, 醫療]
+                            if (mode === 'treatment') return 2; // [止血, 呼吸]
+                            if (mode === 'radio') return 4; // [救護, 消防, 破壞, 搬運]
+                            if (mode === 'hazard_fire') return 1;
+                            if (mode === 'hazard_vehicle') return 1;
+                            return 0;
+                        };
+                        const count = getOptionCount(menu.mode);
+
+                        // 處理方向鍵 (支援 WASD 與 方向鍵)
+                        let change = 0;
+                        if (['ArrowLeft'].includes(e.key)) change = -1;
+                        if (['ArrowRight'].includes(e.key)) change = 1;
+                        if (['ArrowUp'].includes(e.key)) change = -1; // 垂直選單向上
+                        if (['ArrowDown'].includes(e.key)) change = 1; // 垂直選單向下
+
+                        if (change !== 0) {
+                            menu.selectedIndex = (menu.selectedIndex + change + count) % count;
+                            return; // 阻止角色移動 (因為現在 WASD 不會讓 change 變動，所以不會執行這行，角色即可移動)
+                        }
+
+                        // 按 E 鍵確認選擇 (模擬點擊該選項的位置)
+                        if (e.key === 'e' || e.key === 'E' || e.key === 'Enter') {
+                            let targetX = menu.x, targetY = menu.y;
+                            const mx = menu.x - 40, my = menu.y - 60;
+
+                            // 根據當前模式與 selectedIndex 計算模擬點擊座標
+                            if (menu.mode === 'main') {
+                                if (menu.selectedIndex === 0) { targetX = mx + 20; targetY = my + 20; }
+                                else { targetX = mx + 65; targetY = my + 20; }
+                            }
+                            else if (menu.mode === 'triage') {
+                                if (menu.selectedIndex === 4) { // 右側醫療按鈕
+                                    targetX = mx + 65; targetY = my + 20;
+                                } else { // 2x2 Grid
+                                    const startX = mx - 25; const startY = my - 12;
+                                    const btnW = 30, btnH = 30, gap = 5;
+                                    const col = menu.selectedIndex % 2;
+                                    const row = Math.floor(menu.selectedIndex / 2);
+                                    targetX = startX + col * (btnW + gap) + btnW / 2;
+                                    targetY = startY + row * (btnH + gap) + btnH / 2;
+                                }
+                            }
+                            else if (menu.mode === 'treatment') {
+                                if (menu.selectedIndex === 0) { targetX = mx + 40; targetY = my + 2.5; }
+                                else { targetX = mx + 40; targetY = my + 32.5; }
+                            }
+                            else if (menu.mode === 'radio') {
+                                const radioX = menu.x - 50; const radioY = menu.y - 120;
+                                const btnH = 25, gap = 5;
+                                const row = menu.selectedIndex;
+                                targetX = radioX + 50;
+                                targetY = (radioY + gap) + row * (btnH + gap) + btnH / 2;
+                            }
+                            else if (['hazard_fire', 'hazard_vehicle'].includes(menu.mode)) {
+                                targetX = mx + 40; targetY = my + 20;
+                            }
+
+                            // 執行模擬點擊
+                            const rect = canvasRef.current.getBoundingClientRect();
+                            const scaleX = canvasRef.current.width / rect.width;
+                            const scaleY = canvasRef.current.height / rect.height;
+                            const clientX = ((targetX - state.camera.x) / scaleX) + rect.left;
+                            const clientY = ((targetY - state.camera.y) / scaleY) + rect.top;
+
+                            handleCanvasClick({ clientX, clientY, preventDefault: () => { } });
+                            return;
+                        }
+                    }
+
+                    // ... (保留原有的其他按鍵邏輯，如 C, I 等) ...
+                    if (e.key >= '1' && e.key <= '9') handleSlotClick(parseInt(e.key) - 1);
+                    else if (e.key === '0') handleSlotClick(9);
+                    if (e.key === 'c' || e.key === 'C') { cancelAction(); }
+                    if (e.key === 'i' || e.key === 'I') { setShowInventory(prev => !prev); }
+
                     if (e.key === 'w' || e.key === 'ArrowUp') state.keys.w = true;
                     if (e.key === 's' || e.key === 'ArrowDown') state.keys.s = true;
                     if (e.key === 'a' || e.key === 'ArrowLeft') state.keys.a = true;
                     if (e.key === 'd' || e.key === 'ArrowRight') state.keys.d = true;
-                    if (e.key >= '1' && e.key <= '9') handleSlotClick(parseInt(e.key) - 1);
-                    else if (e.key === '0') handleSlotClick(9);
-                    // --- C 鍵取消 ---
-                    if (e.key === 'c' || e.key === 'C') {
-                        cancelAction();
-                    }
-                    // ★★★ I 鍵切換道具欄顯示 ★★★
-                    if (e.key === 'i' || e.key === 'I') {
-                        setShowInventory(prev => !prev);
-                    }
-                    // --- 按下 E 鍵互動 ---
-                    if (e.key === 'e' || e.key === 'E') {
-                        const state = gameState.current;
+
+                    // --- 按下 E 鍵互動 (僅當選單未開啟時) ---
+                    if ((e.key === 'e' || e.key === 'E') && !menu.active) {
+                        // ... (保留原有的 E 鍵互動搜尋邏輯) ...
                         const p = state.player;
                         let targetX = p.x;
                         let targetY = p.y;
 
-                        // 1. 放置模式優先：點擊預覽位置中心
+                        // 1. 放置模式
                         if (state.placementMode.active) {
                             targetX = state.placementMode.x + state.placementMode.w / 2;
                             targetY = state.placementMode.y + state.placementMode.h / 2;
                         }
-                        // 2. 一般模式：搜尋最近的可互動目標 (自動瞄準)
+                        // 2. 一般模式
                         else {
-                            const interactRadius = 80; // 搜尋半徑 (比滑鼠點擊寬容一點)
+                            const interactRadius = 80;
                             let minDist = Infinity;
                             let bestTarget = null;
 
@@ -971,72 +1243,45 @@
                                 if (!h.beingExtinguished) {
                                     const dist = Math.hypot(p.x - h.x, p.y - h.y);
                                     if (dist < interactRadius + 20 && dist < minDist) {
-                                        minDist = dist;
-                                        bestTarget = { x: h.x, y: h.y };
+                                        minDist = dist; bestTarget = { x: h.x, y: h.y };
                                     }
                                 }
                             });
-
-                            // (B) 檢查車輛 (優先度次於火焰，需確認受困且未破壞)
+                            // (B) 檢查車輛
                             if (!bestTarget) {
                                 state.obstacles.forEach(o => {
                                     if (['sedan', 'truck'].includes(o.type)) {
-                                        const cx = o.x + o.w / 2;
-                                        const cy = o.y + o.h / 2;
+                                        const cx = o.x + o.w / 2; const cy = o.y + o.h / 2;
                                         const dist = Math.hypot(p.x - cx, p.y - cy);
                                         const survivorInside = state.survivors.find(s => s.trappedInVehicle === o);
-
                                         if (dist < interactRadius + 20 && survivorInside && !o.isBreached && o.breakTimer === 0) {
-                                            if (dist < minDist) {
-                                                minDist = dist;
-                                                bestTarget = { x: cx, y: cy };
-                                            }
+                                            if (dist < minDist) { minDist = dist; bestTarget = { x: cx, y: cy }; }
                                         }
                                     }
                                 });
                             }
-
-                            // (C) 檢查傷患 (優先度最後)
+                            // (C) 檢查傷患
                             if (!bestTarget) {
                                 state.survivors.forEach(s => {
-                                    // 排除無法互動的狀態 (受困且未破壞、移動中、已上車)
-                                    if ((s.trappedInVehicle && !s.trappedInVehicle.isBreached) ||
-                                        s.isEvacuating || s.isBeingCarried || s.onAmbulance) return;
-
+                                    if ((s.trappedInVehicle && !s.trappedInVehicle.isBreached) || s.isEvacuating || s.isBeingCarried || s.onAmbulance) return;
                                     const dist = Math.hypot(p.x - s.x, p.y - s.y);
                                     if (dist < interactRadius && dist < minDist) {
-                                        minDist = dist;
-                                        bestTarget = { x: s.x, y: s.y };
+                                        minDist = dist; bestTarget = { x: s.x, y: s.y };
                                     }
                                 });
                             }
-
-                            // 如果找到目標，將模擬點擊的座標設為目標中心
-                            if (bestTarget) {
-                                targetX = bestTarget.x;
-                                targetY = bestTarget.y;
-                            }
-                            // 若沒找到目標，維持點擊玩家位置 (targetX/Y 預設值)
+                            if (bestTarget) { targetX = bestTarget.x; targetY = bestTarget.y; }
                         }
 
-                        // 3. 執行模擬點擊
-                        // 必須將遊戲世界座標 (World) 轉換回 螢幕座標 (Client)，因為 handleCanvasClick 預期接收滑鼠事件
+                        // 執行模擬點擊來開啟選單
                         const rect = canvasRef.current.getBoundingClientRect();
                         const scaleX = canvasRef.current.width / rect.width;
                         const scaleY = canvasRef.current.height / rect.height;
-
-                        // WorldX = (ClientX - RectLeft) * Scale + CamX
-                        // => ClientX = ((WorldX - CamX) / Scale) + RectLeft
                         const clientX = ((targetX - state.camera.x) / scaleX) + rect.left;
                         const clientY = ((targetY - state.camera.y) / scaleY) + rect.top;
 
-                        handleCanvasClick({
-                            clientX,
-                            clientY,
-                            preventDefault: () => { }
-                        });
+                        handleCanvasClick({ clientX, clientY, preventDefault: () => { } });
                     }
-
                 };
 
                 const handleKeyUp = (e) => {
@@ -1234,6 +1479,9 @@
                             if (clickX >= menuX - 20 && clickX <= menuX + 100 && clickY >= menuY + 20 && clickY <= menuY + 45) {
                                 statsTracker.current.airway.total++; // 總嘗試次數
                                 if (menu.target && menu.target.data) {
+                                    if (menu.target.isDead) {
+                                        addFeedback(menu.x, menu.y, "已死亡 (無效)", "#7f8c8d");
+                                    }
                                     if (menu.target.data.resp === '無') {
                                         setScore(prev => prev + 100);
                                         if (Math.random() > 0.5) {
@@ -1303,11 +1551,12 @@
                             const gap = 5;
                             const btnW = menuW - 10;
                             const startX = radioX + 5;
-                            const startY = radioY + gap;
+
                             // 繪製背景 (為了判斷點擊範圍)
                             // drawRoundedRect(mx, my, 100, 100, 5, 'rgba(0,0,0,0.85)');
                             // ctx.strokeStyle = '#3498db'; ctx.lineWidth = 2; ctx.strokeRect(mx, my, 100, 100);
-
+                            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                            ctx.font = 'bold 12px "Segoe UI"';
                             // 1. 請求救護車 (扣 MP 10)
                             if (clickX >= startX && clickX <= startX + btnW && clickY >= startY && clickY <= startY + btnH) {
                                 // ★★★ 新增：檢查冷卻時間 ★★★
@@ -1464,7 +1713,7 @@
                             }
                         }
                         // 如果點擊了選單以外的地方...
-                        if (menu.target === state.player && (clickX < radioX || clickX > radioX + menuW || clickY < radioY || clickY > radioY + menuH)) {
+                        if (clickX < radioX || clickX > radioX + menuW || clickY < radioY || clickY > radioY + menuH) {
                             menu.active = false; menu.mode = 'main'; return;
                         }
 
@@ -1485,6 +1734,7 @@
                                 if (distToPlayer < interactRadius + 50) {
                                     menu.active = true; menu.mode = 'hazard_fire';
                                     menu.x = h.x; menu.y = h.y; menu.target = h;
+                                    menu.selectedIndex = 0;
                                 } else {
                                     addFeedback(h.x, h.y, "太遠了!", "#e74c3c");
                                 }
@@ -1496,30 +1746,42 @@
                     // 檢查車輛
                     if (!clickedSomething) {
                         for (let o of state.obstacles) {
+                            // 排除非車輛的障礙物
                             if (o.type !== 'guardrail' && o.type !== 'wall' && o.type !== 'vehicle_block' && o.type !== 'metal_debris') {
+                                // 檢查點擊座標是否在車輛範圍內
                                 if (clickX > o.x && clickX < o.x + o.w && clickY > o.y && clickY < o.y + o.h) {
+
+                                    // ★★★ 修改重點：檢查互動有效性 ★★★
+                                    const survivorInside = state.survivors.find(s => s.trappedInVehicle === o);
+
+                                    // 如果「車體已破壞」或「車內無傷患受困」，則視為無互動目標
+                                    // 使用 continue 跳過，讓點擊事件可以穿透車輛，被後續的傷患偵測捕捉
+                                    if (o.isBreached || !survivorInside) {
+                                        continue;
+                                    }
+
+                                    // --- 只有「未破壞」且「有人受困」的車輛，才攔截點擊 ---
                                     clickedSomething = true;
                                     const distToPlayer = Math.hypot(player.x - (o.x + o.w / 2), player.y - (o.y + o.h / 2));
+
                                     if (distToPlayer < interactRadius + 40) {
-                                        const survivorInside = state.survivors.find(s => s.trappedInVehicle === o);
-                                        if (!o.isBreached) {
-                                            if (survivorInside) {
-                                                menu.active = true; menu.mode = 'hazard_vehicle';
-                                                menu.x = o.x + o.w / 2; menu.y = o.y; menu.target = o;
-                                            } else {
-                                                addFeedback(o.x + o.w / 2, o.y, "車內無人", "#bdc3c7");
-                                            }
-                                        } else {
-                                            addFeedback(o.x + o.w / 2, o.y, "車體已破壞", "#2ecc71");
-                                        }
+                                        // 距離足夠，開啟互動選單
+                                        menu.active = true;
+                                        menu.mode = 'hazard_vehicle';
+                                        menu.x = o.x + o.w / 2;
+                                        menu.y = o.y;
+                                        menu.target = o;
+                                        menu.selectedIndex = 0;
                                     } else {
+                                        // 距離太遠的提示
                                         addFeedback(o.x + o.w / 2, o.y, "靠近查看", "#e74c3c");
                                     }
-                                    return;
+                                    return; // 攔截點擊，不再往下檢查傷患
                                 }
                             }
                         }
                     }
+
 
                     // 檢查傷患
                     for (let s of state.survivors) {
@@ -1535,6 +1797,7 @@
                             if (distToPlayer < interactRadius) {
                                 menu.active = true; menu.mode = 'main';
                                 menu.x = s.x; menu.y = s.y; menu.target = s;
+                                menu.selectedIndex = 0;
                             } else {
                                 addFeedback(s.x, s.y, "太遠了!", "#e74c3c");
                             }
@@ -1544,13 +1807,16 @@
 
                     if (!clickedSomething && !state.placementMode.active) {
                         addFeedback(clickX, clickY, "●", "rgba(255,255,255,0.5)");
+                        player.targetX = clickX;
+                        player.targetY = clickY;
+                        player.movingToTarget = true;
                     }
                 };
 
                 window.addEventListener('keydown', handleKeyDown);
                 window.addEventListener('keyup', handleKeyUp);
                 canvas.addEventListener('click', handleCanvasClick);
-                canvas.addEventListener('contextmenu', handleContextMenu); // 新增：監聽右鍵
+                window.addEventListener('contextmenu', handleContextMenu);  // 新增：監聽右鍵
                 window.addEventListener('mousemove', handleMouseMove);
 
                 const drawRect = (x, y, w, h, color) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); };
@@ -1737,6 +2003,9 @@
                         // --- 右側按鈕 (醫療) ---
                         ctx.fillStyle = '#2c3e50'; ctx.fillRect(mx + 45, my, 40, 40); ctx.strokeStyle = '#fff'; ctx.strokeRect(mx + 45, my, 40, 40);
                         ctx.fillStyle = '#2ecc71'; ctx.fillRect(mx + 62, my + 10, 6, 20); ctx.fillRect(mx + 55, my + 17, 20, 6);
+                        ctx.lineWidth = 3; ctx.strokeStyle = '#f1c40f'; // 黃色高亮
+                        if (menu.selectedIndex === 0) ctx.strokeRect(mx, my, 40, 40);
+                        if (menu.selectedIndex === 1) ctx.strokeRect(mx + 45, my, 40, 40);
                     } else if (menu.mode === 'triage') {
                         // --- 修改開始: 替換為圖片風格的圖示 ---
                         const colors = ['green', 'yellow', 'red', 'black'];
@@ -1790,13 +2059,20 @@
                             } else { // 平嘴
                                 ctx.fillRect(bx + 12, by + 19, 6, 2);
                             }
+                            if (menu.selectedIndex === i) {
+                                ctx.lineWidth = 3; ctx.strokeStyle = '#f1c40f';
+                                ctx.strokeRect(bx, by, btnW, btnH);
+                            }
                         });
 
                         // --- 新增：繪製右側常駐的「醫療按鈕」 ---
                         // (複製自 Main Mode)
                         ctx.fillStyle = '#2c3e50'; ctx.fillRect(mx + 45, my, 40, 40); ctx.strokeStyle = '#fff'; ctx.strokeRect(mx + 45, my, 40, 40);
                         ctx.fillStyle = '#2ecc71'; ctx.fillRect(mx + 62, my + 10, 6, 20); ctx.fillRect(mx + 55, my + 17, 20, 6);
-
+                        if (menu.selectedIndex === 4) {
+                            ctx.lineWidth = 3; ctx.strokeStyle = '#f1c40f';
+                            ctx.strokeRect(mx + 45, my, 40, 40);
+                        }
                     } else if (menu.mode === 'treatment') {
                         ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(mx - 25, my - 15, 130, 70);
                         ctx.fillStyle = '#e74c3c'; ctx.fillRect(mx - 20, my - 10, 120, 25);
@@ -1829,27 +2105,37 @@
 
                         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                         ctx.font = 'bold 12px "Segoe UI"';
+                        const radioOptions = [
+                            { label: "請求救護車", color: '#3498db' },     // 藍
+                            { label: "請求消防車", color: '#e74c3c' },     // 紅
+                            { label: "請求破壞小組", color: '#e67e22' },   // 橘
+                            { label: "請求搬運人員", color: '#9b59b6' }    // 紫
+                        ];
+                        // 統一繪製按鈕與高亮框
+                        radioOptions.forEach((opt, i) => {
+                            const by = (radioY + gap) + i * (btnH + gap);
 
-                        // 1. 請求救護車按鈕 (藍色)
-                        const btn1Y = radioY + gap;
-                        ctx.fillStyle = '#3498db'; ctx.fillRect(radioX + 5, btn1Y, btnW, btnH);
-                        ctx.fillStyle = 'white'; ctx.fillText("請求救護車", radioX + menuW / 2, btn1Y + btnH / 2);
+                            // 繪製按鈕本體
+                            ctx.fillStyle = opt.color;
+                            ctx.fillRect(radioX + 5, by, btnW, btnH);
 
-                        // 2. 請求消防車按鈕 (紅色)
-                        const btn2Y = btn1Y + btnH + gap;
-                        ctx.fillStyle = '#e74c3c'; ctx.fillRect(radioX + 5, btn2Y, btnW, btnH);
-                        ctx.fillStyle = 'white'; ctx.fillText("請求消防車", radioX + menuW / 2, btn2Y + btnH / 2);
+                            // 繪製文字
+                            ctx.fillStyle = 'white';
+                            ctx.fillText(opt.label, radioX + menuW / 2, by + btnH / 2);
 
-                        // 3. 請求破壞小組按鈕 (橘色)
-                        const btn3Y = btn2Y + btnH + gap;
-                        ctx.fillStyle = '#e67e22'; ctx.fillRect(radioX + 5, btn3Y, btnW, btnH);
-                        ctx.fillStyle = 'white'; ctx.fillText("請求破壞小組", radioX + menuW / 2, btn3Y + btnH / 2);
-                        // ★★★ 新增：4. 請求搬運人員按鈕 (紫色) ★★★
-                        const btn4Y = btn3Y + btnH + gap;
-                        ctx.fillStyle = '#9b59b6'; ctx.fillRect(radioX + 5, btn4Y, btnW, btnH);
-                        ctx.fillStyle = 'white'; ctx.fillText("請求搬運人員", radioX + menuW / 2, btn4Y + btnH / 2);
+                            // 繪製選中高亮 (原本的迴圈邏輯整合至此)
+                            if (menu.selectedIndex === i) {
+                                ctx.lineWidth = 3; ctx.strokeStyle = '#f1c40f';
+                                ctx.strokeRect(radioX + 5, by, btnW, btnH);
+                            }
+                        });
                     }
+
+
                 };
+
+
+
 
                 const drawSurvivorInfo = (player) => {
                     const interactRadius = 60;
@@ -2318,13 +2604,7 @@
 
                     if (state.interactionMenu.active && state.interactionMenu.target) {
                         const target = state.interactionMenu.target;
-                        // --- 確保無線電選單 (target 為玩家) 跟隨玩家移動 ---
-                        if (target === p && state.interactionMenu.mode === 'radio') {
-                            state.interactionMenu.x = p.x;
-                            state.interactionMenu.y = p.y;
-                            // 如果是無線電選單，它會一直跟隨玩家，不需進行距離檢查來關閉
-                            return;
-                        }
+
                         let targetX = target.x;
                         let targetY = target.y;
                         if (target.w) { targetX += target.w / 2; targetY += target.h / 2; }
@@ -2711,12 +2991,58 @@
                     if (state.keys.s) { nextY += speed; p.dir = 0; p.moving = true; }
                     if (state.keys.a) { nextX -= speed; p.dir = 2; p.moving = true; }
                     if (state.keys.d) { nextX += speed; p.dir = 3; p.moving = true; }
+                    // 只有在沒有按鍵盤的時候，才執行滑鼠導航
+                    if (p.movingToTarget && !isTryingToMove) {
+                        const dx = p.targetX - p.x;
+                        const dy = p.targetY - p.y;
+                        const dist = Math.hypot(dx, dy);
 
+                        // 如果距離小於移動速度，直接抵達
+                        if (dist <= speed) {
+                            nextX = p.targetX;
+                            nextY = p.targetY;
+                            p.movingToTarget = false; // 停止移動
+                            // p.moving = false; // 這裡不設為 false，讓下方碰撞偵測後的賦值去處理
+                        } else {
+                            // 計算移動向量
+                            nextX += (dx / dist) * speed;
+                            nextY += (dy / dist) * speed;
+                            p.moving = true;
+
+                            // 根據移動方向更新角色面向 (dir)
+                            if (Math.abs(dx) > Math.abs(dy)) {
+                                p.dir = dx > 0 ? 3 : 2; // 右 : 左
+                            } else {
+                                p.dir = dy > 0 ? 0 : 1; // 下 : 上
+                            }
+                        }
+                    }
                     state.camera.x = p.x - GAME_WIDTH / 2;
                     state.camera.y = p.y - GAME_HEIGHT / 2;
                     state.camera.x = Math.max(0, Math.min(state.camera.x, WORLD_WIDTH - GAME_WIDTH)); // 更新邊界
                     state.camera.y = Math.max(0, Math.min(state.camera.y, 1200 - GAME_HEIGHT));
+                    // ★★★ Joystick 移動邏輯整合 ★★★
+                    if (joystickRef.current.active) {
+                        const { vecX, vecY } = joystickRef.current;
+                        if (Math.abs(vecX) > 0.1 || Math.abs(vecY) > 0.1) {
+                            // 根據推動幅度決定速度 (0.5 ~ 1.0 倍速)
+                            const pushStrength = Math.min(1, Math.hypot(vecX, vecY));
+                            const currentSpeed = speed * (0.5 + 0.5 * pushStrength);
 
+                            nextX += vecX * currentSpeed;
+                            nextY += vecY * currentSpeed;
+                            p.moving = true;
+
+                            // 更新面向
+                            if (Math.abs(vecX) > Math.abs(vecY)) {
+                                p.dir = vecX > 0 ? 3 : 2;
+                            } else {
+                                p.dir = vecY > 0 ? 0 : 1;
+                            }
+                            // 搖桿操作時取消滑鼠點擊移動
+                            p.movingToTarget = false;
+                        }
+                    }
                     state.decorations.forEach(d => {
                         if (d.type === 'oil') {
                             const dist = Math.hypot(p.x - d.x, p.y - d.y);
@@ -2761,7 +3087,15 @@
                             collide = true; break;
                         }
                     }
-                    if (!collide) { p.x = nextX; p.y = nextY; }
+                    if (!collide) {
+                        p.x = nextX; p.y = nextY;
+                    } else {
+                        // ★★★ 新增：若發生碰撞，停止滑鼠自動移動，避免卡住 ★★★
+                        if (p.movingToTarget) {
+                            p.movingToTarget = false;
+                            p.moving = false;
+                        }
+                    }
                     if (p.moving) { p.animTimer++; p.frame = Math.floor(p.animTimer / 5); }
 
                     state.survivors.forEach(s => {
@@ -2992,7 +3326,7 @@
                     window.removeEventListener('keydown', handleKeyDown);
                     window.removeEventListener('keyup', handleKeyUp);
                     canvas.removeEventListener('click', handleCanvasClick);
-                    canvas.removeEventListener('contextmenu', handleContextMenu);
+                    window.removeEventListener('contextmenu', handleContextMenu);
                     // 移除監聽 // 移除 mousemove
                     window.removeEventListener('mousemove', handleMouseMove);
                     cancelAnimationFrame(state.animationFrameId);
@@ -3182,11 +3516,160 @@
                                 </button>
                             </div>
                         )}
+                        {/* ★★★ 4. 新增：無線電 UI 面板 (仿平板風格) ★★★ */}
+                        {showRadioPanel && (
+                            <div className="absolute top-[210px] left-3 w-72 bg-slate-900/95 border-2 border-blue-500 rounded-lg shadow-[0_0_30px_rgba(59,130,246,0.3)] p-4 text-white z-50 animate-fade-in font-sans custom-scrollbar">
+                                <div className="flex justify-between items-center mb-4 border-b border-blue-500/50 pb-2">
+                                    <h2 className="text-lg font-bold text-blue-400 flex items-center gap-2">
+                                        📻 無線電指揮
+                                    </h2>
+                                    <span className="text-xs text-gray-400">MP: {Math.floor(playerStatsUI.mp)}</span>
+                                </div>
+                                <div className="space-y-3">
+                                    {/* 1. 請求救護車 */}
+                                    <button
+                                        onClick={() => {
+                                            const state = gameState.current;
+                                            if (state.ambulanceCooldown > 0) {
+                                                state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: `冷卻中 (${Math.ceil(state.ambulanceCooldown / 60)}s)`, color: "#bdc3c7", life: 60, vy: -0.5 });
+                                                return;
+                                            }
+                                            const stagingArea = state.triageMats.find(m => m.color === 'ambulance_staging');
+                                            if (!stagingArea) {
+                                                state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "無設置救護車待命區", color: "#e74c3c", life: 60, vy: -0.5 });
+                                                return;
+                                            }
+                                            if (state.stats.mp >= 10) {
+                                                state.stats.mp -= 10;
+                                                state.ambulanceCooldown = 3600;
+                                                const ambCount = Math.floor(Math.random() * 3) + 1;
+                                                for (let k = 0; k < ambCount; k++) {
+                                                    const ax = stagingArea.x + 10 + Math.random() * (stagingArea.w - 90);
+                                                    const ay = stagingArea.y + 10 + Math.random() * (stagingArea.h - 60);
+                                                    state.emergencyVehicles.push({
+                                                        id: Math.random(), type: 'ambulance', passengers: [], state: 'arriving',
+                                                        x: state.camera.x - 150 - (k * 100), y: ay, targetX: ax, targetY: ay, w: 80, h: 40, angle: 0
+                                                    });
+                                                }
+                                                state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "救護車趕往中...", color: "#3498db", life: 60, vy: -0.5 });
+                                                forceUpdate(n => n + 1);
+                                            } else {
+                                                state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "MP不足!", color: "#e74c3c", life: 60, vy: -0.5 });
+                                            }
+                                        }}
+                                        className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 p-3 rounded flex justify-between items-center transition group"
+                                    >
+                                        <span className="font-bold text-blue-300 group-hover:text-blue-200">請求救護車</span>
+                                        <span className="text-xs bg-blue-900 text-blue-200 px-2 py-1 rounded">-10 MP</span>
+                                    </button>
+
+                                    {/* 2. 請求消防車 */}
+                                    <button
+                                        onClick={() => {
+                                            const state = gameState.current;
+                                            const target = state.hazards.find(h => !h.beingExtinguished);
+                                            if (target) {
+                                                if (state.stats.mp >= 10) {
+                                                    state.stats.mp -= 10;
+                                                    target.beingExtinguished = true;
+                                                    state.firefightingSquads.push({
+                                                        x: 50 + 700, y: 540 / 2 - 150, target: target, state: 'moving_to_fire'
+                                                    });
+                                                    state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "派遣消防車支援", color: "#e74c3c", life: 60, vy: -0.5 });
+                                                    forceUpdate(n => n + 1);
+                                                } else {
+                                                    state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "MP不足!", color: "#e74c3c", life: 60, vy: -0.5 });
+                                                }
+                                            } else {
+                                                state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "目前無火災需處理", color: "#2ecc71", life: 60, vy: -0.5 });
+                                            }
+                                        }}
+                                        className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 p-3 rounded flex justify-between items-center transition group"
+                                    >
+                                        <span className="font-bold text-red-400 group-hover:text-red-300">請求消防車</span>
+                                        <span className="text-xs bg-red-900 text-red-200 px-2 py-1 rounded">-10 MP</span>
+                                    </button>
+
+                                    {/* 3. 請求破壞小組 */}
+                                    <button
+                                        onClick={() => {
+                                            const state = gameState.current;
+                                            const target = state.obstacles.find(o =>
+                                                ['sedan', 'truck'].includes(o.type) && !o.isBreached && o.breakTimer === 0 &&
+                                                state.survivors.some(s => s.trappedInVehicle === o) &&
+                                                !state.rescueSquads.some(sq => sq.target === o)
+                                            );
+                                            if (target) {
+                                                if (state.stats.mp >= 10) {
+                                                    state.stats.mp -= 10;
+                                                    state.rescueSquads.push({
+                                                        x: 50 + 700, y: 540 / 2 - 100, target: target, state: 'moving_to_vehicle'
+                                                    });
+                                                    state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "派遣破壞小組", color: "#e67e22", life: 60, vy: -0.5 });
+                                                    forceUpdate(n => n + 1);
+                                                } else {
+                                                    state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "MP不足!", color: "#e74c3c", life: 60, vy: -0.5 });
+                                                }
+                                            } else {
+                                                state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "無受困車輛需處理", color: "#bdc3c7", life: 60, vy: -0.5 });
+                                            }
+                                        }}
+                                        className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 p-3 rounded flex justify-between items-center transition group"
+                                    >
+                                        <span className="font-bold text-orange-400 group-hover:text-orange-300">請求破壞小組</span>
+                                        <span className="text-xs bg-orange-900 text-orange-200 px-2 py-1 rounded">-10 MP</span>
+                                    </button>
+
+                                    {/* 4. 請求搬運人員 */}
+                                    <button
+                                        onClick={() => {
+                                            const state = gameState.current;
+                                            if (state.npcGroups.length >= 2) {
+                                                state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "搬運人力已達上限", color: "#e74c3c", life: 60, vy: -0.5 });
+                                                return;
+                                            }
+                                            const unassignedTargets = state.survivors.filter(s =>
+                                                s.triageTag && ['red', 'yellow', 'black'].includes(s.triageTag) &&
+                                                !s.isEvacuating && !s.hasArrived && !s.isBeingCarried &&
+                                                !state.npcGroups.some(g => g.target === s) &&
+                                                (!s.trappedInVehicle || s.trappedInVehicle.isBreached) &&
+                                                !state.hazards.some(h => Math.hypot(s.x - h.x, s.y - h.y) < h.r + 30)
+                                            );
+                                            if (unassignedTargets.length > 0) {
+                                                if (state.stats.mp >= 10) {
+                                                    state.stats.mp -= 10;
+                                                    unassignedTargets.sort((a, b) => {
+                                                        const p = { 'black': 3, 'red': 2, 'yellow': 1 };
+                                                        return p[b.triageTag] - p[a.triageTag];
+                                                    });
+                                                    state.npcGroups.push({
+                                                        leaderX: 20 + 700, leaderY: 600, followerX: 0 + 700, followerY: 600,
+                                                        target: unassignedTargets[0], state: 'moving_to_target', carrying: false
+                                                    });
+                                                    state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "增派搬運人員", color: "#9b59b6", life: 60, vy: -0.5 });
+                                                    forceUpdate(n => n + 1);
+                                                } else {
+                                                    state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "MP不足!", color: "#e74c3c", life: 60, vy: -0.5 });
+                                                }
+                                            } else {
+                                                state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "目前無傷患需搬運", color: "#bdc3c7", life: 60, vy: -0.5 });
+                                            }
+                                        }}
+                                        className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 p-3 rounded flex justify-between items-center transition group"
+                                    >
+                                        <span className="font-bold text-purple-400 group-hover:text-purple-300">請求搬運人員</span>
+                                        <span className="text-xs bg-purple-900 text-purple-200 px-2 py-1 rounded">-10 MP</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+
                         {/* ★★★ 檢傷平板浮動視窗 (靠右顯示) ★★★ */}
                         {showTabletUI && (
                             <>
                                 {/* 左側：救護車調度列表 */}
-                                <div className="absolute top-16 left-4 w-72 bg-slate-900/95 border-2 border-blue-500 rounded-lg shadow-[0_0_30px_rgba(59,130,246,0.3)] p-4 text-white z-50 max-h-[80vh] overflow-y-auto font-sans animate-fade-in custom-scrollbar">
+                                <div className="absolute top-16 right-80 w-72 bg-slate-900/95 border-2 border-blue-500 rounded-lg shadow-[0_0_30px_rgba(59,130,246,0.3)] p-4 text-white z-50 max-h-[80vh] overflow-y-auto font-sans animate-fade-in custom-scrollbar">
                                     <div className="flex justify-between items-center mb-4 border-b border-blue-500/50 pb-2">
                                         <h2 className="text-lg font-bold text-blue-400 flex items-center gap-2">
                                             🚑 救護車調度
@@ -3524,7 +4007,6 @@
                                         <IconActivity /> <span>OBJ:</span>
                                     </div>
                                     <div>檢傷人數 ({survivorCount}/{totalSurvivors})</div>
-                                    <div>檢傷人數 ({survivorCount}/{totalSurvivors})</div>
 
                                     {/* 第二列：編號 1. 與 安置人數 */}
                                     <div className="text-right text-gray-400">1.</div>
@@ -3589,7 +4071,7 @@
                             </button>
                         </div>
                         {/* --- 道具欄移至此處 (外層黑色區域) --- */}
-                        <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 pointer-events-auto select-none z-50 transition-opacity duration-300 ${showInventory ? 'opacity-100' : 'opacity-0'}`}>
+                        <div className={`absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-auto select-none z-50 transition-opacity duration-300 ${showInventory ? 'opacity-100' : 'opacity-0'}`}>
                             <div className="flex gap-1 bg-black/80 p-2 border border-gray-600 rounded-md shadow-[0_0_15px_rgba(0,0,0,0.8)]">
                                 {items.map((item, i) => (
                                     <div
@@ -3601,14 +4083,71 @@
                                         title={item.name}
                                     >
                                         <span className="absolute bottom-0.5 right-1 text-[8px] text-gray-500 group-hover:text-gray-300 font-bold">{i === 9 ? 0 : i + 1}</span>
-                                        <div className="w-full h-full flex items-center justify-center p-2">
-                                            <div className="w-full h-full rounded-sm opacity-80" style={{ backgroundColor: item.color }}></div>
+                                        <div className="w-full h-full flex items-center justify-center p-1">
+                                            <img
+                                                src={item.imgSrc}
+                                                alt={item.name}
+                                                className="w-full h-full object-contain drop-shadow-md"
+                                                draggable="false"
+                                                onError={(e) => {
+                                                    // 如果圖片讀取失敗，自動變回顯示色塊 (fallback)
+                                                    e.target.style.display = 'none';
+                                                    e.target.nextSibling.style.display = 'block';
+                                                }}
+                                            />
+                                            {/* 備用色塊 (預設隱藏，圖片掛掉時顯示) */}
+                                            <div
+                                                className="w-full h-full rounded-sm opacity-80 hidden"
+                                                style={{ backgroundColor: item.color }}
+                                            ></div>
                                         </div>
                                         <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
                                             {item.name}
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+                        {/* ★★★ 手機版 UI 控制層 (新增) ★★★ */}
+                        <div className="absolute inset-0 pointer-events-none z-[60]">
+                            {/* 虛擬搖桿 (左下) */}
+                            <div
+                                className="joystick-zone pointer-events-auto"
+                                onTouchStart={handleJoystickTouchStart}
+                                onTouchMove={handleJoystickTouchMove}
+                                onTouchEnd={handleJoystickTouchEnd}
+                                onTouchCancel={handleJoystickTouchEnd}
+                            >
+                                <div className="joystick-base">
+                                    <div
+                                        className="joystick-knob"
+                                        style={{ transform: `translate(calc(-50% + ${joystickUI.x}px), calc(-50% + ${joystickUI.y}px))` }}
+                                    ></div>
+                                </div>
+                            </div>
+
+                            {/* 互動按鈕 (Interact - E) - 右下 */}
+                            <div
+                                className="mobile-btn btn-interact pointer-events-auto"
+                                onTouchStart={(e) => { e.preventDefault(); triggerKey('e'); }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" /><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" /><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" /></svg>
+                            </div>
+
+                            {/* 取消按鈕 (Cancel - C) - 右上 */}
+                            <div
+                                className="mobile-btn btn-cancel pointer-events-auto"
+                                onTouchStart={(e) => { e.preventDefault(); triggerCancel(); }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                            </div>
+
+                            {/* 道具欄開關 (Inventory - I) - 中下 */}
+                            <div
+                                className="mobile-btn btn-inventory pointer-events-auto"
+                                onTouchStart={(e) => { e.preventDefault(); setShowInventory(prev => !prev); }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7" /><path d="M3 7l9-4 9 4" /><path d="M12 3v4" /></svg>
                             </div>
                         </div>
                     </div>
