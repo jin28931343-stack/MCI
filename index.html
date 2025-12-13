@@ -2826,6 +2826,14 @@
                                     group.target.y = dest.y;
                                     group.target.isBeingCarried = false;
                                     group.target.hasArrived = true; // 標記為已安置
+                                    // 檢查檢傷分類是否與實際傷情相符
+                                    if (group.target.triageTag === group.target.data.severity) {
+                                        if (!group.target.hasBeenMovedScored) {
+                                            setScore(prev => prev + 100);
+                                            addFeedback(group.leaderX, group.leaderY - 50, "移動正確 +100", "#f1c40f");
+                                            group.target.hasBeenMovedScored = true; // 標記已加過移動分
+                                        }
+                                    }
 
                                     // NPC 重置狀態，準備去搜尋下一個傷患
                                     group.target = null;
@@ -2881,10 +2889,18 @@
                                 s.isEvacuating = false;
                                 s.hasArrived = true; // 標記已抵達
                                 addFeedback(s.x, s.y, "抵達待命區", "#2ecc71");
+                                // 綠色傷患自行移動到綠色區，且實際傷情確實為綠色
+                                if (s.triageTag === 'green' && s.data.severity === 'green') {
+                                    if (!s.hasBeenMovedScored) {
+                                        setScore(prev => prev + 100);
+                                        addFeedback(s.x, s.y - 50, "移動正確 +100", "#f1c40f");
+                                        s.hasBeenMovedScored = true; // 標記已加過移動分
+                                    }
+                                }
                                 checkTriageCounts(); // 自行移動抵達後檢查計數
                             } else {
-                                s.x += (dx / dist) * 0.8; // 輕傷移動速度
-                                s.y += (dy / dist) * 0.8;
+                                s.x += (dx / dist) * 0.4; // 輕傷移動速度
+                                s.y += (dy / dist) * 0.4;
                             }
                         }
                     }
@@ -4084,48 +4100,78 @@
                                 )}
                             </button>
                         </div>
-                        {/* --- 道具欄移至此處 (外層黑色區域) --- */}
-                        <div className={`absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-auto select-none z-50 transition-opacity duration-300 ${showInventory ? 'opacity-100' : 'opacity-0'}`}>
-                            <div className="flex gap-1 bg-black/80 p-2 border border-gray-600 rounded-md shadow-[0_0_15px_rgba(0,0,0,0.8)]">
-                                {items.map((item, i) => (
+                        {/* --- 道具欄 (修改後：左下角摺疊式) --- */}
+                        <div className="absolute bottom-4 left-4 pointer-events-auto select-none z-50">
+                            {!showInventory ? (
+                                // 摺疊狀態：顯示背包圖示
+                                <div
+                                    onClick={() => setShowInventory(true)}
+                                    className="w-12 h-12 border border-gray-500 bg-black/80 hover:bg-gray-700/80 rounded-md cursor-pointer flex items-center justify-center shadow-lg group transition-transform hover:scale-105"
+                                    title="打開道具欄 (I)"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300 group-hover:text-white">
+                                        <path d="M3 7v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7" /><path d="M3 7l9-4 9 4" /><path d="M12 3v4" />
+                                    </svg>
+                                    {/* 提示文字 */}
+                                    <div className="absolute left-14 top-1/2 -translate-y-1/2 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
+                                        背包 (I)
+                                    </div>
+                                </div>
+                            ) : (
+                                // 展開狀態：顯示道具列表 (由左向右延伸)
+                                <div className="flex items-end gap-1">
+                                    {/* 關閉按鈕 (X) */}
                                     <div
-                                        key={i}
-                                        onClick={() => handleSlotClick(i)}
-                                        className={`w-10 h-10 border bg-gray-900/50 hover:bg-gray-700/50 transition-colors relative cursor-pointer group
+                                        onClick={() => setShowInventory(false)}
+                                        className="w-8 h-8 mb-1 mr-1 border border-red-500/50 bg-red-900/30 hover:bg-red-900/50 rounded cursor-pointer flex items-center justify-center text-red-400 font-bold"
+                                        title="收起"
+                                    >
+                                        ✕
+                                    </div>
+                                    {/* --- 道具欄移至此處 (外層黑色區域) --- */}
+
+                                    <div className="flex gap-1 bg-black/80 p-2 border border-gray-600 rounded-md shadow-[0_0_15px_rgba(0,0,0,0.8)]">
+                                        {items.map((item, i) => (
+                                            <div
+                                                key={i}
+                                                onClick={() => handleSlotClick(i)}
+                                                className={`w-10 h-10 border bg-gray-900/50 hover:bg-gray-700/50 transition-colors relative cursor-pointer group
                                         ${selectedSlot === i ? 'border-yellow-400 shadow-[0_0_10px_rgba(253,224,71,0.5)]' : 'border-gray-600 hover:border-gray-400'}
                                     `}
-                                        title={item.name}
-                                    >
-                                        <span className="absolute bottom-0.5 right-1 text-[8px] text-gray-500 group-hover:text-gray-300 font-bold">{i === 9 ? 0 : i + 1}</span>
-                                        <div className="w-full h-full flex items-center justify-center p-1">
-                                            <img
-                                                src={item.imgSrc}
-                                                alt={item.name}
-                                                className="w-full h-full object-contain drop-shadow-md"
-                                                draggable="false"
-                                                onError={(e) => {
-                                                    // 如果圖片讀取失敗，自動變回顯示色塊 (fallback)
-                                                    e.target.style.display = 'none';
-                                                    e.target.nextSibling.style.display = 'block';
-                                                }}
-                                            />
-                                            {/* 備用色塊 (預設隱藏，圖片掛掉時顯示) */}
-                                            <div
-                                                className="w-full h-full rounded-sm opacity-80 hidden"
-                                                style={{ backgroundColor: item.color }}
-                                            ></div>
-                                        </div>
-                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
-                                            {item.name}
-                                        </div>
+                                                title={item.name}
+                                            >
+                                                <span className="absolute bottom-0.5 right-1 text-[8px] text-gray-500 group-hover:text-gray-300 font-bold">{i === 9 ? 0 : i + 1}</span>
+                                                <div className="w-full h-full flex items-center justify-center p-1">
+                                                    <img
+                                                        src={item.imgSrc}
+                                                        alt={item.name}
+                                                        className="w-full h-full object-contain drop-shadow-md"
+                                                        draggable="false"
+                                                        onError={(e) => {
+                                                            // 如果圖片讀取失敗，自動變回顯示色塊 (fallback)
+                                                            e.target.style.display = 'none';
+                                                            e.target.nextSibling.style.display = 'block';
+                                                        }}
+                                                    />
+                                                    {/* 備用色塊 (預設隱藏，圖片掛掉時顯示) */}
+                                                    <div
+                                                        className="w-full h-full rounded-sm opacity-80 hidden"
+                                                        style={{ backgroundColor: item.color }}
+                                                    ></div>
+                                                </div>
+                                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
+                                                    {item.name}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
+                                </div>
+                            )}
                         </div>
                         {/* ★★★ 手機版 UI 控制層 (新增) ★★★ */}
                         <div className="absolute inset-0 pointer-events-none z-[60]">
                             {/* 虛擬搖桿 (左下) */}
-                            <div
+                            {/*<div
                                 className="joystick-zone pointer-events-auto"
                                 onTouchStart={handleJoystickTouchStart}
                                 onTouchMove={handleJoystickTouchMove}
@@ -4139,17 +4185,17 @@
                                     ></div>
                                 </div>
                             </div>
-
+                            */}
                             {/* 互動按鈕 (Interact - E) - 右下 */}
-                            <div
+                            {/*<div
                                 className="mobile-btn btn-interact pointer-events-auto"
                                 onTouchStart={(e) => { e.preventDefault(); triggerKey('e'); }}
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" /><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" /><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" /></svg>
                             </div>
-
+                            */}
                             {/* 取消按鈕 (Cancel - C) - 右上 */}
-                            <div
+                            {/*<div
                                 className="mobile-btn btn-cancel pointer-events-auto"
                                 onTouchStart={(e) => { e.preventDefault(); triggerCancel(); }}
                             >
@@ -4157,16 +4203,21 @@
                             </div>
 
                             {/* 道具欄開關 (Inventory - I) - 中下 */}
-                            <div
+                            {/* <div
                                 className="mobile-btn btn-inventory pointer-events-auto"
                                 onTouchStart={(e) => { e.preventDefault(); setShowInventory(prev => !prev); }}
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7" /><path d="M3 7l9-4 9 4" /><path d="M12 3v4" /></svg>
                             </div>
+                            */}
                         </div>
+
                     </div>
+
                 </div >
+
             );
+
         }
 
 
