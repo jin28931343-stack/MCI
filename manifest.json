@@ -1,0 +1,21 @@
+{
+  "name": "MCI 大量傷患模擬演練",
+  "short_name": "MCI Sim",
+  "start_url": "./Mass Casualty Incident (MCI)11412131452.html",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "PIC/MIC_game3.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "PIC/MIC_game3.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
