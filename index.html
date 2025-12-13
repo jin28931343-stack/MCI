@@ -53,7 +53,22 @@
             touch-action: none;
             /* 禁止預設觸控行為，防止畫面滑動 */
         }
-
+  /* ★★★ 針對手機直向模式 (orientation: portrait) 的強制旋轉樣式 ★★★ */
+        @media screen and (orientation: portrait) and (max-device-width: 1024px) {
+            body {
+                transform: rotate(90deg);
+                transform-origin: bottom left;
+                /* 將畫面旋轉 90 度並定位 */
+                position: absolute;
+                top: -100vw;
+                left: 0;
+                /* 交換寬高設定：高度設為視窗寬度，寬度設為視窗高度 */
+                height: 100vw;
+                width: 100vh;
+                overflow: hidden;
+                background-color: #050505;
+            }
+        }
         canvas {
             image-rendering: auto;
         }
