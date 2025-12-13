@@ -3,6 +3,13 @@
 
 <head>
     <meta charset="UTF-8">
+    <!-- PWA 設定 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#050505">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="MCI Sim">
+    <link rel="apple-touch-icon" href="PIC/MIC_game3.png">
     <!-- Google SEO 搜尋引擎優化設定  -->
     <meta name="description" content="MCI (Mass Casualty Incident) 大量傷患事件模擬演練系統。透過互動式遊戲學習 START 檢傷分類法 (Simple Triage and Rapid Treatment)，提升災難現場檢傷分類 (Triage) 與緊急處置能力。">
     <meta name="keywords" content="MCI, triage, START, mass casualty incidents, 大量傷患, 檢傷分類, 災難模擬, 緊急醫療, EMT">
@@ -4704,6 +4711,20 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
+    </script>
+    <!-- ★★★ PWA Service Worker 註冊腳本 ★★★ -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
     </script>
 </body>
 
