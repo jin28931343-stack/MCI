@@ -3954,7 +3954,7 @@
                         // 只有未被滅火的火焰會持續產生煙霧
                         if (h.type === 'fire' && !h.beingExtinguished) {
                             // 控制煙霧產生頻率 (0.7 = 30% 機率每幀產生)
-                            if (Math.random() > 0.7) {
+                            if (Math.random() > 0.95) {
                                 state.particles.push({
                                     x: h.x + (Math.random() - 0.5) * h.r,   // 在火焰範圍內隨機位置
                                     y: h.y - h.r * 0.5,                     // 從火焰上半部冒出
@@ -5354,3 +5354,4 @@
 </body>
 
 </html>
+
