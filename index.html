@@ -1125,7 +1125,8 @@
                         active: true,
                         type: 'zone',
                         color: item.type, // 使用 type 作為顏色鍵值
-                        w: 160, h: 120,   // 設定比檢傷地墊稍大
+                        w: item.type === 'ambulance_staging' ? 250 : 160,
+                        h: item.type === 'ambulance_staging' ? 180 : 120,
                         valid: false,
                         x: 0, y: 0
                     };
@@ -1268,6 +1269,49 @@
                 const pMan = new Image(); pMan.src = 'PIC/player_man.png'; assets.player['男'] = pMan;
                 const pWoman = new Image(); pWoman.src = 'PIC/player_woman.png'; assets.player['女'] = pWoman;
 
+                // 3. 載入火焰圖片 (用於火災危險區域)
+                const fireImg = new Image();
+                fireImg.src = 'PIC/fire.png'; //  PIC 資料夾內有名為 fire.png 的圖片
+                assets.fire = fireImg;
+
+                // ★★★ 載入搬運人員 (EMT) 圖片 ★★★
+                const emtImg = new Image();
+                emtImg.src = 'PIC/emt.png'; // 請確保 PIC 資料夾內有 emt.png 圖片
+                assets.emt = emtImg;
+
+                // ★★★ 載入消防車圖片 (預留插圖位置) ★★★
+                const firetruckImg = new Image();
+                firetruckImg.src = 'PIC/firetruck.png'; //  PIC 資料夾內有此圖片
+                assets.firetruck = firetruckImg;
+
+                // ★★★ 載入救護車圖片 ★★★
+                const ambulanceImg = new Image();
+                ambulanceImg.src = 'PIC/ambulance.png'; // 請確保 PIC 資料夾內有 ambulance.png
+                assets.ambulance = ambulanceImg;
+
+                // ★★★ 新增：載入警車圖片 (預留插圖位置) ★★★
+                const policeImg = new Image();
+                policeImg.src = 'PIC/police.png'; // 預留位置：請準備 police.png
+                assets.police = policeImg;
+
+                // ★★★ 載入一般車輛插圖 (轎車/卡車) ★★★
+                const sedanImg = new Image();
+                sedanImg.src = 'PIC/sedan.png'; // 預留位置：請準備 sedan.png
+                assets.sedan = sedanImg;
+
+                const truckImg = new Image();
+                truckImg.src = 'PIC/truck.png'; // 預留位置：請準備 truck.png
+                assets.truck = truckImg;
+
+                // ★★★ 載入 SUV 與 廂型車 插圖 ★★★
+                const suvImg = new Image();
+                suvImg.src = 'PIC/suv.png'; // 預留位置：請準備 suv.png
+                assets.suv = suvImg;
+
+                const vanImg = new Image();
+                vanImg.src = 'PIC/van.png'; // 預留位置：請準備 van.png
+                assets.van = vanImg;
+
                 const ctx = canvas.getContext('2d');
                 const state = gameState.current;
 
@@ -1371,7 +1415,7 @@
                 // --- 生成車輛與障礙物 (所有X座標都要加上 LEFT_EXPANSION) ---
 
                 // 定義消防車位置 (加上偏移)
-                const firetruckData = { type: 'firetruck', x: 50 + LEFT_EXPANSION, y: WORLD_HEIGHT / 2 - 150, w: 140, h: 60, angle: 0.3 };
+                const firetruckData = { type: 'firetruck', x: 50 + LEFT_EXPANSION, y: WORLD_HEIGHT / 2 - 150, w: 300, h: 140, angle: 0.3 };
 
                 // --- 計算消防車前後淨空區域 ---
                 const ftClearanceLength = 420;
@@ -1386,7 +1430,8 @@
                 // ★★★ 初始救護車加入 passengers 與 ID ★★★
                 state.emergencyVehicles.push({
                     id: Math.random(), type: 'ambulance', passengers: [], state: 'waiting',
-                    x: 80 + LEFT_EXPANSION, y: WORLD_HEIGHT / 2 + 100, w: 100, h: 50, angle: -0.2
+                    x: 80 + LEFT_EXPANSION, y: WORLD_HEIGHT / 2 + 100, w: 170, h: 100, angle: -0.2,
+                    isStatic: true // ★★★ 標記第一台車為靜態指揮車，不可後送 ★★★
                 });
 
                 state.emergencyVehicles.push({ type: 'police', x: 30 + LEFT_EXPANSION, y: WORLD_HEIGHT / 2 + 200, w: 80, h: 40, angle: 0.1 });
@@ -1438,13 +1483,24 @@
 
                 // 一般車輛生成 (範圍調整)
                 for (let i = 0; i < 30; i++) {
-                    let type = Math.random() > 0.8 ? 'truck' : 'sedan';
+                    const vehicleTypes = ['sedan', 'truck', 'suv', 'van'];
+                    let type = vehicleTypes[Math.floor(Math.random() * vehicleTypes.length)];
                     // 生成範圍從 300 + LEFT_EXPANSION 開始
                     let x = rand(300 + LEFT_EXPANSION, WORLD_WIDTH - 170);
                     let y = rand(170, WORLD_HEIGHT - 170);
                     let rotated = Math.random() > 0.3;
-                    let w = (type === 'sedan' ? (rotated ? 80 : 40) : (rotated ? 120 : 50));
-                    let h = (type === 'sedan' ? (rotated ? 40 : 80) : (rotated ? 50 : 120));
+                    let baseW = 100, baseH = 100;
+                    if (type === 'truck') {
+                        baseW = 130; baseH = 130;
+                    } else if (type === 'suv') {
+                        baseW = 110; baseH = 110; // SUV 稍大
+                    } else if (type === 'van') {
+                        baseW = 120; baseH = 120; // 廂型車介於中間
+                    }
+                    // 轎車(sedan) 維持 100x100
+
+                    let w = (rotated ? baseH : baseW);
+                    let h = (rotated ? baseW : baseH);
 
                     // 檢查消防車淨空區
                     if (x + w > ftClearanceZone.minX && x < ftClearanceZone.maxX && y + h > ftClearanceZone.minY && y < ftClearanceZone.maxY) {
@@ -1455,7 +1511,7 @@
                     if (!overlap) {
                         state.obstacles.push({
                             x, y, w, h, type, rotated,
-                            color: type === 'truck' ? '#fff' : PALETTE.carColors[Math.floor(Math.random() * PALETTE.carColors.length)],
+                            color: type === 'truck' ? '#fff' : (type === 'van' ? '#95a5a6' : PALETTE.carColors[Math.floor(Math.random() * PALETTE.carColors.length)]),
                             hitbox: { x: x + 2, y: y + 2, w: w - 4, h: h - 4 },
                             isBreached: false, breakTimer: 0
                         });
@@ -1512,7 +1568,8 @@
 
                             for (let o of state.obstacles) {
                                 // 只檢查實體車輛與車輛阻擋塊
-                                if (o.type === 'sedan' || o.type === 'truck' || o.type === 'vehicle_block') {
+                                // ★★★ 修改：檢查所有實體車輛類型 ★★★
+                                if (['sedan', 'truck', 'suv', 'van', 'vehicle_block'].includes(o.type)) {
                                     if (sx > o.x - safeMargin && sx < o.x + o.w + safeMargin &&
                                         sy > o.y - safeMargin && sy < o.y + o.h + safeMargin) {
                                         isOverlapping = true;
@@ -1638,7 +1695,7 @@
                     if (state.isGameOver) return;
 
                     const menu = state.interactionMenu;
-
+                    const currentSlot = selectedSlotRef.current;
                     // ★★★ 新增：選單鍵盤導航邏輯 ★★★
                     if (menu.active) {
                         // 定義各模式的選項數量
@@ -1757,7 +1814,7 @@
                             // (B) 檢查車輛
                             if (!bestTarget) {
                                 state.obstacles.forEach(o => {
-                                    if (['sedan', 'truck'].includes(o.type)) {
+                                    if (['sedan', 'truck', 'suv', 'van'].includes(o.type)) {
                                         const cx = o.x + o.w / 2; const cy = o.y + o.h / 2;
                                         const dist = Math.hypot(p.x - cx, p.y - cy);
                                         const survivorInside = state.survivors.find(s => s.trappedInVehicle === o);
@@ -1841,7 +1898,7 @@
                             // 1. 破壞器材 (MP-10)
                             if (item.type === 'breaker_tool') {
                                 for (let o of state.obstacles) {
-                                    if (['sedan', 'truck'].includes(o.type)) {
+                                    if (['sedan', 'truck', 'suv', 'van'].includes(o.type)) {
                                         // 檢查點擊是否在車輛範圍內
                                         if (clickX > o.x && clickX < o.x + o.w && clickY > o.y && clickY < o.y + o.h) {
                                             if (state.rescueSquads.length > 0) {
@@ -2111,8 +2168,8 @@
                                                 y: ay, // 修正：使用 ay 作為垂直位置
                                                 targetX: ax, // 修正：使用 ax 作為目標 X
                                                 targetY: ay, // 修正：使用 ay 作為目標 Y
-                                                w: aw,
-                                                h: ah,
+                                                w: 1200,
+                                                h: 1200,
                                                 angle: 0 // 進場時角度歸零
                                             });
 
@@ -2155,7 +2212,7 @@
                             if (clickX >= startX && clickX <= startX + btnW && clickY >= startY + btnH * 2 + gap * 2 && clickY <= startY + btnH * 3 + gap * 2) {
                                 // 搜尋一個: 是車輛 + 未破壞 + 內有傷患 + 尚未有小組前往
                                 const target = state.obstacles.find(o =>
-                                    ['sedan', 'truck'].includes(o.type) &&
+                                    ['sedan', 'truck', 'suv', 'van'].includes(o.type) &&
                                     !o.isBreached &&
                                     o.breakTimer === 0 &&
                                     state.survivors.some(s => s.trappedInVehicle === o) &&
@@ -2459,19 +2516,42 @@
                     ctx.save(); ctx.translate(v.x + v.w / 2, v.y + v.h / 2); ctx.rotate(v.angle);
                     ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 10;
                     if (v.type === 'firetruck') {
-                        drawRoundedRect(-v.w / 2, -v.h / 2, v.w, v.h, 6, '#c0392b');
-                        ctx.fillStyle = '#e74c3c'; ctx.fillRect(-v.w / 2 + 5, -v.h / 2 + 5, v.w - 10, v.h - 10);
-                        ctx.fillStyle = '#bdc3c7'; ctx.beginPath(); ctx.rect(-v.w / 2 + 10, -5, v.w - 20, 10); ctx.fill();
-                        for (let x = -v.w / 2 + 15; x < v.w / 2 - 10; x += 10) { ctx.clearRect(x, -3, 2, 6); }
+                        // ★★★ 若有消防車圖片則繪製圖片，否則繪製原本的向量圖 ★★★
+                        const ftImg = assets.firetruck;
+                        if (ftImg && ftImg.complete && ftImg.naturalWidth !== 0) {
+                            // 繪製圖片 (填滿車輛尺寸)
+                            ctx.drawImage(ftImg, -v.w / 2, -v.h / 2, v.w, v.h);
+                        } else {
+                            // (備案) 原本的向量繪製邏輯
+                            drawRoundedRect(-v.w / 2, -v.h / 2, v.w, v.h, 6, '#c0392b');
+                            ctx.fillStyle = '#e74c3c'; ctx.fillRect(-v.w / 2 + 5, -v.h / 2 + 5, v.w - 10, v.h - 10);
+                            ctx.fillStyle = '#bdc3c7'; ctx.beginPath(); ctx.rect(-v.w / 2 + 10, -5, v.w - 20, 10); ctx.fill();
+                            for (let x = -v.w / 2 + 15; x < v.w / 2 - 10; x += 10) { ctx.clearRect(x, -3, 2, 6); }
+                        }
                     } else if (v.type === 'ambulance') {
-                        drawRoundedRect(-v.w / 2, -v.h / 2, v.w, v.h, 6, '#ecf0f1');
-                        ctx.fillStyle = '#34495e'; ctx.beginPath();
-                        ctx.fillRect(-v.w / 2 + 5, -v.h / 2 + 5, 20, v.h - 10);
-                        ctx.fillStyle = '#e74c3c'; ctx.fillRect(-20, -5, 25, 10); ctx.fillRect(-12.5, -12.5, 10, 25);
+                        const ambImg = assets.ambulance;
+                        if (ambImg && ambImg.complete && ambImg.naturalWidth !== 0) {
+                            ctx.drawImage(ambImg, -v.w / 2, -v.h / 2, v.w, v.h);
+                        } else {
+                            // (備案) 原本的向量繪製邏輯
+                            drawRoundedRect(-v.w / 2, -v.h / 2, v.w, v.h, 6, '#ecf0f1');
+                            ctx.fillStyle = '#34495e'; ctx.beginPath();
+                            ctx.fillRect(-v.w / 2 + 5, -v.h / 2 + 5, 20, v.h - 10);
+                            ctx.fillStyle = '#e74c3c'; ctx.fillRect(-20, -5, 25, 10); ctx.fillRect(-12.5, -12.5, 10, 25);
+                        }
                     } else if (v.type === 'police') {
-                        drawRoundedRect(-v.w / 2, -v.h / 2, v.w, v.h, 6, '#2c3e50');
-                        ctx.fillStyle = '#ecf0f1'; ctx.fillRect(-v.w / 2 + 25, -v.h / 2, 35, v.h);
-                        ctx.fillStyle = '#7f8c8d'; ctx.fillRect(-5, -v.h / 2 + 2, 10, v.h - 4);
+                        // ★★★ 修改：若有警車圖片則繪製圖片，否則繪製原本的向量圖 ★★★
+                        const policeImg = assets.police;
+                        if (policeImg && policeImg.complete && policeImg.naturalWidth !== 0) {
+                            const drawW = 150; // 設定圖片寬度
+                            const drawH = 150;  // 設定圖片高度
+                            ctx.drawImage(policeImg, -drawW / 2, -drawH / 2, drawW, drawH);
+                        } else {
+                            // (備案) 原本的向量繪製邏輯
+                            drawRoundedRect(-v.w / 2, -v.h / 2, v.w, v.h, 6, '#2c3e50');
+                            ctx.fillStyle = '#ecf0f1'; ctx.fillRect(-v.w / 2 + 25, -v.h / 2, 35, v.h);
+                            ctx.fillStyle = '#7f8c8d'; ctx.fillRect(-5, -v.h / 2 + 2, 10, v.h - 4);
+                        }
                     }
                     // ★★★ 新增：繪製小巴 (黃色外觀) ★★★
                     else if (v.type === 'mini_bus') {
@@ -2496,12 +2576,31 @@
                 };
 
                 const drawFire = (hazard) => {
-                    const flicker = Math.random() * 10;
-                    const r = hazard.r + flicker;
-                    const gradient = ctx.createRadialGradient(hazard.x, hazard.y, r * 0.2, hazard.x, hazard.y, r * 2);
-                    gradient.addColorStop(0, 'rgba(255, 100, 0, 0.4)'); gradient.addColorStop(1, 'rgba(255, 50, 0, 0)');
-                    ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(hazard.x, hazard.y, r * 2, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = `rgba(255, ${150 + Math.random() * 100}, 0, 0.8)`; ctx.beginPath(); ctx.arc(hazard.x + (Math.random() - 0.5) * 10, hazard.y + (Math.random() - 0.5) * 10, r * 0.5, 0, Math.PI * 2); ctx.fill();
+                    // ★★★ 定義 img (從 assets 取得) 與 size (根據半徑計算) ★★★
+                    const img = assets.fire;
+                    const size = hazard.r * 2;
+                    // 檢查圖片是否載入完成
+                    if (img && img.complete) {
+                        ctx.save();
+                        ctx.translate(hazard.x, hazard.y);
+
+                        // 加入簡單的縮放動態，模擬火焰燃燒忽大忽小
+                        // 使用 frameCount 產生正弦波，範圍約 0.9 ~ 1.1
+                        const scale = 1 + Math.sin(state.frameCount * 0.2) * 0.1;
+                        ctx.scale(scale, scale);
+
+                        // 繪製圖片 (將中心點對齊座標)
+                        ctx.drawImage(img, -size / 2, -size / 2, size, size);
+                        ctx.restore();
+                    } else {
+                        // (備案) 若圖片尚未載入或讀取失敗，維持原本的圓形漸層繪製，確保遊戲不會出錯
+                        const flicker = Math.random() * 10;
+                        const r = hazard.r + flicker;
+                        const gradient = ctx.createRadialGradient(hazard.x, hazard.y, r * 0.2, hazard.x, hazard.y, r * 2);
+                        gradient.addColorStop(0, 'rgba(255, 100, 0, 0.4)'); gradient.addColorStop(1, 'rgba(255, 50, 0, 0)');
+                        ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(hazard.x, hazard.y, r * 2, 0, Math.PI * 2); ctx.fill();
+                        ctx.fillStyle = `rgba(255, ${150 + Math.random() * 100}, 0, 0.8)`; ctx.beginPath(); ctx.arc(hazard.x + (Math.random() - 0.5) * 10, hazard.y + (Math.random() - 0.5) * 10, r * 0.5, 0, Math.PI * 2); ctx.fill();
+                    }
                 };
 
                 const drawMenu = (menu) => {
@@ -2812,17 +2911,34 @@
 
                 const drawNPCGroups = (groups) => {
                     groups.forEach(group => {
-                        drawFirefighterHighRes(group.followerX, group.followerY, 0, '#1a253a', state.frameCount, true);
-                        drawFirefighterHighRes(group.leaderX, group.leaderY, 0, '#1a253a', state.frameCount, true);
-                        ctx.save();
-                        ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 6; ctx.lineCap = 'round';
-                        ctx.beginPath(); ctx.moveTo(group.followerX, group.followerY - 5); ctx.lineTo(group.leaderX, group.leaderY - 5); ctx.stroke();
-                        ctx.restore();
+                        // ★★★ 使用圖片繪製搬運人員 ★★★
+                        const size = 80; // 設定圖片顯示大小 (可依圖片比例調整)
+                        const img = assets.emt; // 取得預載的 emt 圖片
+
+                        // 1. 繪製跟隨者 (後方人員)
+                        if (img && img.complete) {
+                            ctx.drawImage(img, group.followerX - size / 2, group.followerY - size / 2, size, size);
+                        } else {
+                            // 圖片未載入時的備案 (維持原樣)
+                            drawFirefighterHighRes(group.followerX, group.followerY, 0, '#1a253a', state.frameCount, true);
+                        }
+                        // 4. 繪製擔架上的傷患 (保持不變)
                         if (group.carrying && group.target) {
-                            const midX = (group.leaderX + group.followerX) / 2;
-                            const midY = (group.leaderY + group.followerY) / 2 - 5;
-                            drawRoundedRect(midX - 5, midY - 12, 10, 24, 3, group.target.data.clothColor);
-                            drawCircle(midX, midY - 15, 6, '#f5cba7');
+                            // ★★★ 關鍵修改：將傷患位置暫時鎖定在搬運人員位置 ★★★
+                            // 這樣即使 update 邏輯還在計算雙人中點，視覺上會正確顯示在單人身上
+                            const originalX = group.target.x;
+                            const originalY = group.target.y;
+
+                            // 設定繪製位置 (稍微偏移以增加層次感，例如 y+5)
+                            group.target.x = group.leaderX;
+                            group.target.y = group.leaderY + 5;
+
+                            // 使用原本的插圖繪製函式
+                            drawSurvivorHighRes(group.target);
+
+                            // 繪製完畢後還原座標，避免影響其他邏輯
+                            group.target.x = originalX;
+                            group.target.y = originalY;
                         }
                     });
                 };
@@ -3384,6 +3500,7 @@
                             if (dist < 10) {
                                 group.state = 'carrying';
                                 group.carrying = true;
+                                group.target.isBeingCarried = true;
                                 addFeedback(group.leaderX, group.leaderY, "開始搬運", "#fff");
                             } else {
                                 group.leaderX += (dx / dist) * speed;
@@ -3395,9 +3512,6 @@
                             let isGoingToDecon = false;
 
                             // 判斷是否需要先去除汙
-                            // 條件 1: 傷患處於汙染狀態 (isContaminated 為 true)
-                            // 條件 2: 場景中有設置除汙區 (decon)
-                            // 條件 3: 除汙區位於目標檢傷區的「右方」 (deconMat.x > targetMat.x)
                             if (group.target.data.isContaminated) {
                                 const deconMat = state.triageMats.find(m => m.color === 'decon');
                                 const targetMat = state.triageMats.find(m => m.color === targetTag);
@@ -3446,8 +3560,9 @@
                                             }
                                         }
                                     } else {
-                                        // 若無地墊，雖然抵達集結點，但不算「已安置」，保持待處理狀態
-                                        group.target.hasArrived = false;
+                                        // ★★★ 重點：若無地墊，雖然只是暫置，但必須標記為 hasArrived = true ★★★
+                                        // ★★★ 這樣才能防止系統判定該傷患需要「再次搬運」，導致原地無限迴圈 ★★★
+                                        group.target.hasArrived = true;
                                         addFeedback(group.leaderX, group.leaderY - 20, "無對應區域，暫置於此", "#bdc3c7");
                                     }
 
@@ -3462,6 +3577,7 @@
                                 }
                             } else {
                                 // 移動邏輯 (保持不變)
+                                const speed = 0.6;
                                 group.leaderX += (dx / dist) * speed;
                                 group.leaderY += (dy / dist) * speed;
                                 if (group.target) {
@@ -3925,24 +4041,69 @@
                                 drawRect(o.x, o.y, o.w, o.h, '#7f8c8d'); drawRect(o.x, o.y + 5, o.w, 10, '#95a5a6');
                                 for (let gx = 0; gx < WORLD_WIDTH; gx += 100) drawRect(gx, o.y, 10, o.h, '#555');
                             } else if (o.type !== 'wall') {
-                                drawRect(o.x + 5, o.y + 5, o.w, o.h, 'rgba(0,0,0,0.5)'); drawRect(o.x, o.y, o.w, o.h, o.color);
-                                ctx.fillStyle = '#2c3e50';
-                                if (o.isBreached) {
-                                    ctx.fillStyle = '#555';
-                                }
-                                let cabinW = o.rotated ? o.w * 0.6 : o.w - 4; let cabinH = o.rotated ? o.h - 4 : o.h * 0.5;
-                                let cabinX = o.rotated ? o.x + (o.w - cabinW) / 2 : o.x + 2; let cabinY = o.rotated ? o.y + 2 : o.y + (o.h - cabinH) / 2;
-                                drawRect(cabinX, cabinY, cabinW, cabinH, o.color);
-                                ctx.fillStyle = '#2c3e50';
-                                if (o.rotated) { drawRect(cabinX, cabinY, 4, cabinH); drawRect(cabinX + cabinW - 4, cabinY, 4, cabinH); }
-                                else { drawRect(cabinX, cabinY, cabinW, 4); drawRect(cabinX, cabinY + cabinH - 4, cabinW, 4); }
+                                // ★★★ 修改：一般車輛 (轎車/卡車) 繪製邏輯 ★★★
+                                const carImg = assets[o.type]; // 取得對應圖片 (sedan 或 truck)
+                                let drawnImage = false;
 
-                                if (o.isBreached) {
-                                    ctx.fillStyle = '#000';
-                                    ctx.fillText("破壞", o.x + o.w / 2 - 10, o.y + o.h / 2);
-                                } else if (o.breakTimer > 0) {
-                                    ctx.fillStyle = '#e67e22';
-                                    ctx.fillText(`${Math.ceil(o.breakTimer / 60)}s`, o.x + o.w / 2 - 5, o.y + o.h / 2);
+                                // 檢查圖片是否可用
+                                if (carImg && carImg.complete && carImg.naturalWidth !== 0) {
+                                    ctx.save();
+                                    ctx.translate(o.x + o.w / 2, o.y + o.h / 2); // 移動到中心
+
+                                    // 判斷車輛方向並旋轉
+                                    // 假設原始圖片為直向 (Vertical, 車頭朝上/下)
+                                    // 若 o.w > o.h 表示車輛在遊戲中是橫向的，需旋轉 90 度
+                                    if (o.w > o.h) {
+                                        ctx.rotate(Math.PI / 2);
+                                        // 旋轉後，繪製的寬度應為 o.h，高度為 o.w
+                                        ctx.drawImage(carImg, -o.h / 2, -o.w / 2, o.h, o.w);
+                                    } else {
+                                        // 直向，直接繪製
+                                        ctx.drawImage(carImg, -o.w / 2, -o.h / 2, o.w, o.h);
+                                    }
+
+                                    // 如果車輛被破壞，疊加一層半透明黑色與文字
+                                    if (o.isBreached) {
+                                        ctx.rotate(o.w > o.h ? -Math.PI / 2 : 0); // 轉回來畫文字
+                                        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                                        ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h);
+                                        ctx.fillStyle = '#fff';
+                                        ctx.font = 'bold 12px Arial';
+                                        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                                        ctx.fillText("已破壞", 0, 0);
+                                    } else if (o.breakTimer > 0) {
+                                        ctx.rotate(o.w > o.h ? -Math.PI / 2 : 0);
+                                        ctx.fillStyle = '#e67e22';
+                                        ctx.font = 'bold 14px Arial';
+                                        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                                        ctx.fillText(`${Math.ceil(o.breakTimer / 60)}s`, 0, 0);
+                                    }
+
+                                    ctx.restore();
+                                    drawnImage = true;
+                                }
+
+                                // (Fallback) 若無圖片，使用原本的向量繪製
+                                if (!drawnImage) {
+                                    drawRect(o.x + 5, o.y + 5, o.w, o.h, 'rgba(0,0,0,0.5)'); drawRect(o.x, o.y, o.w, o.h, o.color);
+                                    ctx.fillStyle = '#2c3e50';
+                                    if (o.isBreached) {
+                                        ctx.fillStyle = '#555';
+                                    }
+                                    let cabinW = o.rotated ? o.w * 0.6 : o.w - 4; let cabinH = o.rotated ? o.h - 4 : o.h * 0.5;
+                                    let cabinX = o.rotated ? o.x + (o.w - cabinW) / 2 : o.x + 2; let cabinY = o.rotated ? o.y + 2 : o.y + (o.h - cabinH) / 2;
+                                    drawRect(cabinX, cabinY, cabinW, cabinH, o.color);
+                                    ctx.fillStyle = '#2c3e50';
+                                    if (o.rotated) { drawRect(cabinX, cabinY, 4, cabinH); drawRect(cabinX + cabinW - 4, cabinY, 4, cabinH); }
+                                    else { drawRect(cabinX, cabinY, cabinW, 4); drawRect(cabinX, cabinY + cabinH - 4, cabinW, 4); }
+
+                                    if (o.isBreached) {
+                                        ctx.fillStyle = '#000';
+                                        ctx.fillText("破壞", o.x + o.w / 2 - 10, o.y + o.h / 2);
+                                    } else if (o.breakTimer > 0) {
+                                        ctx.fillStyle = '#e67e22';
+                                        ctx.fillText(`${Math.ceil(o.breakTimer / 60)}s`, o.x + o.w / 2 - 5, o.y + o.h / 2);
+                                    }
                                 }
                             }
                         } else if (item.type === 'survivor') {
@@ -4561,6 +4722,11 @@
                                                 };
 
                                                 const handleVehicleClick = () => {
+                                                    // ★★★ 若為靜態車輛(第一台)，禁止互動 ★★★
+                                                    if (veh.isStatic) {
+                                                        alert("此為現場指揮車，不執行後送任務！");
+                                                        return;
+                                                    }
                                                     if (!selectedPatient) return;
 
                                                     if (canLoad(selectedPatient.triageTag)) {
@@ -4609,8 +4775,11 @@
                                                     }
                                                 };
 
+
                                                 const handleManualDepart = (e) => {
                                                     e.stopPropagation();
+                                                    if (veh.isStatic) return;
+
                                                     if (veh.passengers.length > 0) {
                                                         veh.state = 'departing';
                                                         forceUpdate(prev => prev + 1);
@@ -4620,7 +4789,7 @@
                                                 // 顯示名稱與顏色
                                                 const vehName = veh.type === 'mini_bus' ? `小巴 #${idx + 1}` : `救護車 #${idx + 1}`;
                                                 const vehColor = veh.type === 'mini_bus' ? 'text-yellow-400' : 'text-gray-300';
-
+                                                const displayName = veh.isStatic ? `${vehName} (指揮用)` : vehName;
                                                 return (
                                                     <div
                                                         key={veh.id || idx}
@@ -5069,4 +5238,3 @@
 </body>
 
 </html>
-
