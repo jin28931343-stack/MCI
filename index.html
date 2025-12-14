@@ -11,24 +11,26 @@
     <meta name="apple-mobile-web-app-title" content="MCI Sim">
     <link rel="apple-touch-icon" href="PIC/MIC_game3.png">
     <!-- Google SEO 搜尋引擎優化設定  -->
-    <meta name="description" content="MCI (Mass Casualty Incident) 大量傷患事件模擬演練系統。透過互動式遊戲學習 START 檢傷分類法 (Simple Triage and Rapid Treatment)，提升災難現場檢傷分類 (Triage) 與緊急處置能力。">
+    <meta name="description"
+        content="MCI (Mass Casualty Incident) 大量傷患事件模擬演練系統。透過互動式遊戲學習 START 檢傷分類法 (Simple Triage and Rapid Treatment)，提升災難現場檢傷分類 (Triage) 與緊急處置能力。">
     <meta name="keywords" content="MCI, triage, START, mass casualty incidents, 大量傷患, 檢傷分類, 災難模擬, 緊急醫療, EMT">
     <meta name="author" content="MCI Simulation">
-     <!-- Google 搜尋與社群分享預覽圖片  -->
+    <!-- Google 搜尋與社群分享預覽圖片  -->
     <meta property="og:image" content="https://jin28931343-stack.github.io/MCI/PIC/MIC_game3.png">
     <meta name="image" content="https://jin28931343-stack.github.io/MCI/PIC/MIC_game3.png">
-    
+
     <!-- Open Graph (社交媒體分享優化) -->
     <meta property="og:title" content="MCI 大量傷患模擬演練">
     <meta property="og:description" content="互動式大量傷患 (MCI) 檢傷分類 (Triage) 訓練模擬器。">
     <meta property="og:type" content="website">
 
     <!--  已更正為標準 URL -->
-    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap"
+        rel="stylesheet">
+
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    
+
     <!-- 標題 -->
     <title>MCI 模擬 - 大量傷患檢傷分類 (Triage) 演練</title>
 
@@ -38,13 +40,12 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        
-
         body {
             margin: 0;
             padding: 0;
             background-color: #050505;
             height: 100vh;
+            height: 100dvh;
             overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             user-select: none;
@@ -52,10 +53,18 @@
             /* Safari */
             touch-action: none;
             /* 禁止預設觸控行為，防止畫面滑動 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
+        /* 確保 Canvas 渲染品質 */
         canvas {
             image-rendering: auto;
+            /* 或 pixelated 視風格而定 */
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            /* 增加陰影讓邊界更明顯 */
+
         }
 
         ::-webkit-scrollbar {
@@ -450,6 +459,77 @@
         const IconVolume = ({ muted }) => muted ?
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg> :
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>;
+        // ★★★ 新增：人物選擇畫面元件 ★★★
+        const CharacterSelection = ({ onSelect }) => {
+            return (
+                <div className="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center font-mono text-white animate-fade-in">
+                    <h2 className="text-3xl mb-12 font-bold tracking-widest text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
+                        選擇角色 / SELECT CHARACTER
+                    </h2>
+                    <div className="flex gap-10 md:gap-24">
+                        {/* 男性選項 */}
+                        <div
+                            onClick={() => onSelect('男')}
+                            className="group flex flex-col items-center cursor-pointer transition-all duration-300 hover:scale-110"
+                        >
+                            <div className="w-48 h-64 border-4 border-blue-500 rounded-xl flex items-center justify-center bg-slate-900 relative overflow-hidden group-hover:border-blue-300 group-hover:shadow-[0_0_30px_rgba(59,130,246,0.6)] transition-all">
+                                {/* 預留插圖位置：男性 */}
+                                <img
+                                    src="PIC/player_man.png"
+                                    alt="Male Agent"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                                {/* 圖片讀取失敗時的替代顯示 */}
+                                <div className="hidden absolute inset-0 flex-col items-center justify-center text-blue-500">
+                                    <span className="text-6xl mb-2">♂</span>
+                                    <span className="text-xs">NO IMAGE</span>
+                                </div>
+                                <div className="absolute inset-0 bg-blue-500/10 group-hover:bg-blue-500/0 transition-colors"></div>
+                            </div>
+                            <span className="mt-6 text-2xl font-bold text-blue-500 group-hover:text-blue-300 tracking-wider">
+                                男 (MALE)
+                            </span>
+                        </div>
+
+                        {/* 女性選項 */}
+                        <div
+                            onClick={() => onSelect('女')}
+                            className="group flex flex-col items-center cursor-pointer transition-all duration-300 hover:scale-110"
+                        >
+                            <div className="w-48 h-64 border-4 border-pink-500 rounded-xl flex items-center justify-center bg-slate-900 relative overflow-hidden group-hover:border-pink-300 group-hover:shadow-[0_0_30px_rgba(236,72,153,0.6)] transition-all">
+                                {/* 預留插圖位置：女性 */}
+                                <img
+                                    src="PIC/player_woman.png"
+                                    alt="Female Agent"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                                {/* 圖片讀取失敗時的替代顯示 */}
+                                <div className="hidden absolute inset-0 flex-col items-center justify-center text-pink-500">
+                                    <span className="text-6xl mb-2">♀</span>
+                                    <span className="text-xs">NO IMAGE</span>
+                                </div>
+                                <div className="absolute inset-0 bg-pink-500/10 group-hover:bg-pink-500/0 transition-colors"></div>
+                            </div>
+                            <span className="mt-6 text-2xl font-bold text-pink-500 group-hover:text-pink-300 tracking-wider">
+                                女 (FEMALE)
+                            </span>
+                        </div>
+                    </div>
+                    <div className="mt-16 text-gray-500 text-sm animate-pulse">
+                        請點擊角色以開始任務
+                    </div>
+                </div>
+            );
+        };
+
         // === 新增的 IntroScreen 組件 ===
         const IntroScreen = ({ onStart }) => {
             useEffect(() => {
@@ -562,6 +642,22 @@
                             <h1 className="main-title">大傷現場</h1>
                             <h2 className="sub-title">MASS CASUALTY INCIDENT</h2>
                             <button className="start-btn" onClick={handleStart}>點擊開始 START</button>
+                            {/* ★★★ 畫面右下角顯示版本與作者 (隨標題一起淡入) ★★★ */}
+                            <div style={{
+                                position: 'fixed',
+                                bottom: '20px',
+                                right: '20px',
+                                textAlign: 'right',
+                                color: 'rgba(255, 255, 255, 0.5)', // 半透明白色
+                                fontSize: '12px',
+                                fontFamily: "'Press Start 2P', cursive", // 使用像素字體
+                                textShadow: '2px 2px 0 #000', // 黑色陰影增加可讀性
+                                pointerEvents: 'none', // 確保不影響下方點擊
+                                lineHeight: '1.8'
+                            }}>
+                                <div>Ver: 1.1.0</div>
+                                <div>Author:莊進宏</div>
+                            </div>
                         </div>
                     </div>
                     <div id="transition-overlay"></div>
@@ -572,25 +668,30 @@
         function App() {
             const canvasRef = useRef(null);
             const [gameStarted, setGameStarted] = useState(false);
+            // ★★★ 控制人物選擇畫面的狀態 ★★★
+            const [showCharacterSelect, setShowCharacterSelect] = useState(false);
             const [missionComplete, setMissionComplete] = useState(false);
             const [resultStats, setResultStats] = useState(null);
             const [survivorCount, setSurvivorCount] = useState(0);
             const [evacuatedCount, setEvacuatedCount] = useState(0);
             const [selectedSlot, setSelectedSlot] = useState(0);
-            // ★★★ 專門用於強制畫面更新的 state，避免汙染 survivorCount ★★★
+            // 專門用於強制畫面更新的 state，避免汙染 survivorCount 
             const [updateCount, forceUpdate] = useState(0);
-            // ★★★  Ref 來追蹤 selectedSlot，解決 Event Listener 讀不到最新狀態的問題 ★★★
+            //   Ref 來追蹤 selectedSlot，解決 Event Listener 讀不到最新狀態的問題 ★★★
             const selectedSlotRef = useRef(selectedSlot);
             const [showRadioPanel, setShowRadioPanel] = useState(false);
-            // ★★★ 必須加入此 useEffect，讓 Ref 跟隨 State 更新★★★
+            // 檢傷流程圖狀態控制 
+            const [showFlowchart, setShowFlowchart] = useState(false);
+            const [flowchartIndex, setFlowchartIndex] = useState(0);
+            // 必須加入此 useEffect，讓 Ref 跟隨 State 更新
             useEffect(() => {
                 selectedSlotRef.current = selectedSlot;
             }, [selectedSlot]);
             const [gameOver, setGameOver] = useState(false);
             const [showMatSelector, setShowMatSelector] = useState(false);
-            // ★★★ 控制道具欄顯示的狀態 (預設隱藏，按 I 切換) ★★
+            // 控制道具欄顯示的狀態 (預設隱藏，按 I 切換) 
             const [showInventory, setShowInventory] = useState(false);
-            // ★★★ 音訊控制相關 State 與 Ref ★★★
+            // 音訊控制相關 State 與 Ref 
             const audioCtxRef = useRef(null);
             const [isMuted, setIsMuted] = useState(true);
             const isMutedRef = useRef(true); // 用於在 Scheduler 中讀取
@@ -834,7 +935,8 @@
                 isGameOver: false,
                 keys: { w: false, s: false, a: false, d: false },
                 player: {
-                    x: 300, y: 600, width: 30, height: 30, speed: 1.75, dir: 3, frame: 0, moving: false, animTimer: 0
+                    x: 300, y: 600, width: 30, height: 30, speed: 1.75, dir: 3, frame: 0, moving: false, animTimer: 0,
+                    gender: '男' // ★★★ 預設性別 ★★★
                 },
                 camera: { x: 0, y: 0 },
                 stats: { hp: 100, maxHp: 100, mp: 80, maxMp: 100, sp: 100, maxSp: 100 },
@@ -1054,7 +1156,12 @@
                     x: 0, y: 0
                 };
             };
-
+            // ★★★處理人物選擇的函式 ★★★
+            const handleCharacterSelect = (gender) => {
+                gameState.current.player.gender = gender; // 將選擇寫入 gameState
+                setShowCharacterSelect(false); // 關閉選擇畫面
+                setGameStarted(true); // 正式開始遊戲
+            };
             const handleRestart = () => {
                 setGameOver(true);
                 setTimeout(() => {
@@ -1136,6 +1243,31 @@
                 if (!gameStarted || gameOver || !canvasRef.current) return;
 
                 const canvas = canvasRef.current;
+                // --- ★★★ 新增：預載檢傷分類 Icon 圖片 ★★★ ---
+                const triageIcons = {};
+                ['green', 'yellow', 'red', 'black'].forEach(tag => {
+                    const img = new Image();
+                    // 請確保 PIC 資料夾內有這些對應名稱的圖片，或是自行修改路徑
+                    img.src = `PIC/icon_${tag}.png`;
+                    triageIcons[tag] = img;
+                });
+                // ★★★ 說明：在此處補上 assets 物件定義，防止當機 ★★★
+                // ★★★ 修改：初始化 assets 物件時加入 player 容器 ★★★
+                const assets = { survivors: {}, player: {} };
+                // 2. 載入男女傷患插圖 (★ 請在此處放入您的圖片路徑 ★)
+                // 預留位置：請確保 PIC 資料夾內有 survivor_man.png 與 survivor_woman.png
+                const manImg = new Image();
+                manImg.src = 'PIC/survivor_man.png'; // 設定男性圖片路徑
+                assets.survivors['男'] = manImg;
+
+                const womanImg = new Image();
+                womanImg.src = 'PIC/survivor_woman.png'; // 設定女性圖片路徑
+                assets.survivors['女'] = womanImg;
+
+                // ★★★ 載入玩家角色插圖 (對應選擇畫面的圖片) ★★★
+                const pMan = new Image(); pMan.src = 'PIC/player_man.png'; assets.player['男'] = pMan;
+                const pWoman = new Image(); pWoman.src = 'PIC/player_woman.png'; assets.player['女'] = pWoman;
+
                 const ctx = canvas.getContext('2d');
                 const state = gameState.current;
 
@@ -1511,9 +1643,9 @@
                     if (menu.active) {
                         // 定義各模式的選項數量
                         const getOptionCount = (mode) => {
-                            if (mode === 'main') return 2; // [檢傷, 醫療]
+                            if (mode === 'main') return 3; // [檢傷、醫療、取消]
                             if (mode === 'triage') return 5; // [綠, 黃, 紅, 黑, 醫療]
-                            if (mode === 'treatment') return 2; // [止血, 呼吸]
+                            if (mode === 'treatment') return 3; // [止血, 呼吸]
                             if (mode === 'radio') return 4; // [救護, 消防, 破壞, 搬運]
                             if (mode === 'hazard_fire') return 1;
                             if (mode === 'hazard_vehicle') return 1;
@@ -1541,7 +1673,8 @@
                             // 根據當前模式與 selectedIndex 計算模擬點擊座標
                             if (menu.mode === 'main') {
                                 if (menu.selectedIndex === 0) { targetX = mx + 20; targetY = my + 20; }
-                                else { targetX = mx + 65; targetY = my + 20; }
+                                else if (menu.selectedIndex === 1) { targetX = mx + 65; targetY = my + 20; }
+                                else { targetX = mx + 110; targetY = my + 20; } // 取消按鈕的模擬點擊座標 
                             }
                             else if (menu.mode === 'triage') {
                                 if (menu.selectedIndex === 4) { // 右側醫療按鈕
@@ -1555,9 +1688,10 @@
                                     targetY = startY + row * (btnH + gap) + btnH / 2;
                                 }
                             }
-                            else if (menu.mode === 'treatment') {
+                            if (menu.mode === 'treatment') {
                                 if (menu.selectedIndex === 0) { targetX = mx + 40; targetY = my + 2.5; }
-                                else { targetX = mx + 40; targetY = my + 32.5; }
+                                else if (menu.selectedIndex === 1) { targetX = mx + 40; targetY = my + 32.5; }
+                                else { targetX = mx + 40; targetY = my + 62.5; } // ★★★ 新增：取消按鈕的模擬點擊座標 ★★★
                             }
                             else if (menu.mode === 'radio') {
                                 const radioX = menu.x - 50; const radioY = menu.y - 120;
@@ -1769,6 +1903,11 @@
                             if (clickX >= menuX + 45 && clickX <= menuX + 85 && clickY >= menuY && clickY <= menuY + 40) {
                                 menu.mode = 'treatment'; return;
                             }
+                            // 取消/關閉按鈕 (右, X圖示) 
+                            if (clickX >= menuX + 90 && clickX <= menuX + 130 && clickY >= menuY && clickY <= menuY + 40) {
+                                cancelAction(); // 呼叫與 C 鍵/右鍵相同的取消函式
+                                return;
+                            }
                         }
                         else if (menu.mode === 'triage') {
                             const colors = ['green', 'yellow', 'red', 'black'];
@@ -1871,6 +2010,11 @@
                                     }
                                 }
                                 menu.active = false; menu.mode = 'main'; return;
+                            }
+                            // ★★★ 新增：取消按鈕點擊判定 (位置在呼吸道按鈕下方) ★★★
+                            if (clickX >= menuX - 20 && clickX <= menuX + 100 && clickY >= menuY + 50 && clickY <= menuY + 75) {
+                                cancelAction();
+                                return;
                             }
                         }
                         else if (menu.mode === 'hazard_fire') {
@@ -2249,25 +2393,60 @@
                     ctx.beginPath(); ctx.arc(11, 4 + rightLegOffset * 0.5, 3, 0, Math.PI * 2); ctx.fill();
                     ctx.restore();
                 };
-
+                // --- ★★★ 改用插圖繪製傷患 (區分男女) ★★★ ---
                 const drawSurvivorHighRes = (s) => {
                     if (s.trappedInVehicle && !s.trappedInVehicle.isBreached) return;
                     ctx.save();
                     ctx.translate(s.x, s.y);
-                    ctx.fillStyle = s.data.clothColor; ctx.beginPath(); ctx.ellipse(0, 6, 9, 16, 0, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = '#f5cba7'; ctx.beginPath(); ctx.arc(0, -6, 3, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = '#f5cba7'; ctx.beginPath(); ctx.arc(0, -10, 7, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = '#3e2723'; ctx.beginPath(); ctx.arc(0, -12, 7, Math.PI, 0, true); ctx.fill();
-                    ctx.strokeStyle = s.data.clothColor; ctx.lineWidth = 4; ctx.lineCap = 'round';
-                    ctx.beginPath(); ctx.moveTo(-8, 0); ctx.quadraticCurveTo(-14, 2, -12, 10); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(8, 0); ctx.quadraticCurveTo(14, 2, 12, 10); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(-4, 18); ctx.lineTo(-6, 28); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(4, 18); ctx.lineTo(6, 28); ctx.stroke();
-                    ctx.fillStyle = 'rgba(0,0,0,0.1)'; ctx.beginPath(); ctx.arc(2, -10, 1, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(-2, -10, 1, 0, Math.PI * 2); ctx.fill();
-                    if (s.triageTag) {
-                        ctx.strokeStyle = { 'green': '#2ecc71', 'yellow': '#f1c40f', 'red': '#e74c3c', 'black': '#2d3436' }[s.triageTag];
-                        ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 2, 22, 0, Math.PI * 2); ctx.stroke();
+
+                    // 1. 取得對應性別的圖片
+                    // s.data.sex 在生成時已設定為 '男' 或 '女'
+                    const survivorImg = assets.survivors[s.data.sex];
+
+                    // 設定圖片繪製尺寸 (根據您的圖片比例進行調整，例如 40x40 或 32x48)
+                    const w = 40;
+                    const h = 40;
+
+                    // 檢查圖片是否已載入完成
+                    if (survivorImg && survivorImg.complete) {
+                        // 繪製圖片 (將中心點置於 0,0)
+                        // 假設圖片是正面的，若需要隨移動方向旋轉，可自行加入 ctx.rotate()
+                        ctx.drawImage(survivorImg, -w / 2, -h / 2, w, h);
+                    } else {
+                        // (Fallback) 若圖片讀取失敗或尚未載入，顯示替代圓點，避免隱形
+                        ctx.fillStyle = s.data.sex === '男' ? '#3498db' : '#e91e63';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+                        ctx.fill();
                     }
+
+                    // --- ★★★ 修改處：檢傷分類標記改為旋轉圖片 ★★★ ---
+                    if (s.triageTag) {
+                        const iconImg = triageIcons[s.triageTag];
+
+                        // 確保圖片已載入才繪製，否則使用原本的圓圈作為備案
+                        if (iconImg && iconImg.complete) {
+                            ctx.save();
+                            // 移動到原本圓圈的中心點位置 (0, 2)
+                            ctx.translate(0, 2);
+                            // 執行旋轉 (速度可調整 0.05)
+                            const swayAngle = Math.sin(state.frameCount * 0.1) * 0.3;
+                            ctx.rotate(swayAngle);
+
+                            // 設定 Icon 大小 (例如 48x48)
+                            const iconSize = 48;
+                            // 繪製圖片 (置中)
+                            ctx.drawImage(iconImg, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
+
+                            ctx.restore();
+                        } else {
+                            // (備案) 若圖片讀取失敗或尚未載入，顯示原本的圓圈
+                            ctx.strokeStyle = { 'green': '#2ecc71', 'yellow': '#f1c40f', 'red': '#e74c3c', 'black': '#2d3436' }[s.triageTag];
+                            ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 2, 22, 0, Math.PI * 2); ctx.stroke();
+                        }
+                    }
+
+                    // --- 死亡狀態繪製 (保持不變) ---
                     if (s.isDead) {
                         ctx.fillStyle = 'rgba(230,230,230,0.9)';
                         ctx.beginPath(); ctx.ellipse(0, 8, 12, 26, 0, 0, Math.PI * 2); ctx.fill();
@@ -2379,6 +2558,35 @@
                         ctx.lineWidth = 3; ctx.strokeStyle = '#f1c40f'; // 黃色高亮
                         if (menu.selectedIndex === 0) ctx.strokeRect(mx, my, 40, 40);
                         if (menu.selectedIndex === 1) ctx.strokeRect(mx + 45, my, 40, 40);
+                        // ★★★ 新增：繪製方形 X 取消按鈕 ★★★
+                        const closeX = mx + 90;
+                        const closeY = my;
+
+                        // 背景 (深紅色)
+                        ctx.fillStyle = '#c0392b';
+                        ctx.fillRect(closeX, closeY, 40, 40);
+
+                        // 邊框
+                        ctx.strokeStyle = '#fff';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(closeX, closeY, 40, 40);
+
+                        // 繪製 X 圖示
+                        ctx.beginPath();
+                        ctx.lineWidth = 3;
+                        ctx.lineCap = 'round';
+                        ctx.moveTo(closeX + 10, closeY + 10);
+                        ctx.lineTo(closeX + 30, closeY + 30);
+                        ctx.moveTo(closeX + 30, closeY + 10);
+                        ctx.lineTo(closeX + 10, closeY + 30);
+                        ctx.stroke();
+
+                        // 鍵盤選取時的高亮 (黃色邊框)
+                        if (menu.selectedIndex === 2) {
+                            ctx.lineWidth = 3;
+                            ctx.strokeStyle = '#f1c40f';
+                            ctx.strokeRect(closeX, closeY, 40, 40);
+                        }
                     } else if (menu.mode === 'triage') {
                         // --- 修改開始: 替換為圖片風格的圖示 ---
                         const colors = ['green', 'yellow', 'red', 'black'];
@@ -2447,11 +2655,19 @@
                             ctx.strokeRect(mx + 45, my, 40, 40);
                         }
                     } else if (menu.mode === 'treatment') {
-                        ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(mx - 25, my - 15, 130, 70);
+                        ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(mx - 25, my - 15, 130, 100);
                         ctx.fillStyle = '#e74c3c'; ctx.fillRect(mx - 20, my - 10, 120, 25);
                         ctx.fillStyle = 'white'; ctx.font = '12px Arial'; ctx.fillText("使用止血帶", mx - 10, my + 7);
                         ctx.fillStyle = '#3498db'; ctx.fillRect(mx - 20, my + 20, 120, 25);
                         ctx.fillStyle = 'white'; ctx.fillText("暢通呼吸道", mx - 10, my + 37);
+                        ctx.fillStyle = '#7f8c8d'; // 使用灰色區隔
+                        ctx.fillRect(mx - 20, my + 50, 120, 25);
+                        ctx.fillStyle = 'white';
+                        ctx.fillText("取消 (Cancel)", mx - 10, my + 67);
+                        ctx.lineWidth = 2; ctx.strokeStyle = '#f1c40f';
+                        if (menu.selectedIndex === 0) ctx.strokeRect(mx - 20, my - 10, 120, 25);
+                        if (menu.selectedIndex === 1) ctx.strokeRect(mx - 20, my + 20, 120, 25);
+                        if (menu.selectedIndex === 2) ctx.strokeRect(mx - 20, my + 50, 120, 25);
                     } else if (menu.mode === 'hazard_fire') {
                         ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(mx - 10, my, 100, 40);
                         ctx.fillStyle = '#3498db'; ctx.fillRect(mx - 5, my + 5, 90, 30);
@@ -3217,15 +3433,25 @@
                                     group.target.x = dest.x;
                                     group.target.y = dest.y;
                                     group.target.isBeingCarried = false;
-                                    group.target.hasArrived = true; // 標記為已安置
-                                    // 檢查檢傷分類是否與實際傷情相符
-                                    if (group.target.triageTag === group.target.data.severity) {
-                                        if (!group.target.hasBeenMovedScored) {
-                                            setScore(prev => prev + 100);
-                                            addFeedback(group.leaderX, group.leaderY - 50, "移動正確 +100", "#f1c40f");
-                                            group.target.hasBeenMovedScored = true; // 標記已加過移動分
+                                    // ★★★ 修改：只有當對應顏色的地墊存在時，才標記為「已安置」 ★★★
+                                    const destMat = state.triageMats.find(m => m.color === group.target.triageTag);
+                                    if (destMat) {
+                                        group.target.hasArrived = true; // 標記為已安置
+                                        // 檢查檢傷分類是否與實際傷情相符
+                                        if (group.target.triageTag === group.target.data.severity) {
+                                            if (!group.target.hasBeenMovedScored) {
+                                                setScore(prev => prev + 100);
+                                                addFeedback(group.leaderX, group.leaderY - 50, "移動正確 +100", "#f1c40f");
+                                                group.target.hasBeenMovedScored = true; // 標記已加過移動分
+                                            }
                                         }
+                                    } else {
+                                        // 若無地墊，雖然抵達集結點，但不算「已安置」，保持待處理狀態
+                                        group.target.hasArrived = false;
+                                        addFeedback(group.leaderX, group.leaderY - 20, "無對應區域，暫置於此", "#bdc3c7");
                                     }
+
+
 
                                     // NPC 重置狀態，準備去搜尋下一個傷患
                                     group.target = null;
@@ -3279,15 +3505,23 @@
 
                             if (dist < 10) {
                                 s.isEvacuating = false;
-                                s.hasArrived = true; // 標記已抵達
-                                addFeedback(s.x, s.y, "抵達待命區", "#2ecc71");
-                                // 綠色傷患自行移動到綠色區，且實際傷情確實為綠色
-                                if (s.triageTag === 'green' && s.data.severity === 'green') {
-                                    if (!s.hasBeenMovedScored) {
-                                        setScore(prev => prev + 100);
-                                        addFeedback(s.x, s.y - 50, "移動正確 +100", "#f1c40f");
-                                        s.hasBeenMovedScored = true; // 標記已加過移動分
+
+                                // ★★★ 修改：只有當綠色地墊存在時，才標記為「已安置」 ★★★
+                                const greenMat = state.triageMats.find(m => m.color === 'green');
+                                if (greenMat) {
+                                    s.hasArrived = true; // 標記已抵達
+                                    addFeedback(s.x, s.y, "抵達輕傷區", "#2ecc71");
+                                    // 綠色傷患自行移動到綠色區，且實際傷情確實為綠色
+                                    if (s.triageTag === 'green' && s.data.severity === 'green') {
+                                        if (!s.hasBeenMovedScored) {
+                                            setScore(prev => prev + 100);
+                                            addFeedback(s.x, s.y - 50, "移動正確 +100", "#f1c40f");
+                                            s.hasBeenMovedScored = true; // 標記已加過移動分
+                                        }
                                     }
+                                } else {
+                                    s.hasArrived = false;
+                                    addFeedback(s.x, s.y, "抵達集結點", "#bdc3c7");
                                 }
                                 checkTriageCounts(); // 自行移動抵達後檢查計數
                             } else {
@@ -3730,7 +3964,7 @@
                                 if (Math.floor(Date.now() / 600) % 2 === 0) { ctx.fillText('HELP', s.x - 10, s.y - 15); }
                             }
                         }
-                        // ★★★ 新增：能量飲料繪製邏輯 ★★★
+                        // ★★★ 能量飲料繪製邏輯 ★★★
                         else if (item.type === 'energy_drink') {
                             const d = item.obj;
                             ctx.save();
@@ -3764,7 +3998,26 @@
                             ctx.restore();
                         }
                         else if (item.type === 'player') {
-                            drawFirefighterHighRes(state.player.x, state.player.y, 0, '#1a253a', state.frameCount, state.player.moving);
+                            // ★★★ 修改：根據性別繪製對應圖片 ★★★
+                            const pImg = assets.player[state.player.gender];
+                            // 設定繪製尺寸 (根據圖片比例調整，這裡設為寬40 高60，保持長方形比例)
+                            const w = 40;
+                            const h = 45;
+
+                            if (pImg && pImg.complete) {
+                                ctx.save();
+                                ctx.translate(state.player.x, state.player.y);
+                                // 簡單的走路搖晃動畫
+                                if (state.player.moving) {
+                                    const wobble = Math.sin(state.frameCount * 0.2) * 5;
+                                    ctx.rotate(wobble * Math.PI / 180);
+                                }
+                                ctx.drawImage(pImg, -w / 2, -h / 2, w, h);
+                                ctx.restore();
+                            } else {
+                                // 圖片未載入時的備案 (原本的 canvas 繪製函式)
+                                drawFirefighterHighRes(state.player.x, state.player.y, 0, '#1a253a', state.frameCount, state.player.moving);
+                            }
 
                             // ★★★ 新增：SP Buff 視覺特效 (腳下光環) ★★★
                             if (state.spBuffTimer > 0) {
@@ -3923,9 +4176,15 @@
                 if (total === 0) return "100%"; // 若無該類別傷患，視為滿分
                 return Math.round((correct / total) * 100) + "%";
             };
-            // 如果遊戲還沒開始，只渲染開頭動畫
+            // ★★★ 遊戲流程控制 (Intro -> CharacterSelect -> Game) ★★★
+            // 如果遊戲還沒開始
             if (!gameStarted) {
-                return <IntroScreen onStart={() => setGameStarted(true)} />;
+                // 如果處於「顯示人物選擇」階段
+                if (showCharacterSelect) {
+                    return <CharacterSelection onSelect={handleCharacterSelect} />;
+                }
+                // 否則顯示開頭動畫 (動畫結束後觸發 setShowCharacterSelect)
+                return <IntroScreen onStart={() => setShowCharacterSelect(true)} />;
             }
             return (
                 <div className="flex justify-center items-center h-screen bg-[#050505] text-white overflow-hidden font-mono relative">
@@ -4049,7 +4308,7 @@
                                             }
                                             if (state.stats.mp >= 10) {
                                                 state.stats.mp -= 10;
-                                                state.ambulanceCooldown = 3600;
+                                                state.ambulanceCooldown = 1500;
                                                 const ambCount = Math.floor(Math.random() * 3) + 1;
                                                 for (let k = 0; k < ambCount; k++) {
                                                     const ax = stagingArea.x + 10 + Math.random() * (stagingArea.w - 90);
@@ -4201,7 +4460,15 @@
                                                 // 2. 檢查待命區
                                                 const stagingArea = state.triageMats.find(m => m.color === 'ambulance_staging');
                                                 if (!stagingArea) {
-                                                    alert("請先設置救護車待命區！");
+                                                    // ★★★ 修正：改用遊戲內浮動文字提示，而非 alert ★★★
+                                                    state.feedbacks.push({
+                                                        x: state.player.x,
+                                                        y: state.player.y - 50,
+                                                        text: "請先設置救護車待命區！",
+                                                        color: "#e74c3c",
+                                                        life: 60,
+                                                        vy: -0.5
+                                                    });
                                                     return;
                                                 }
                                                 // 3. 檢查 MP 並扣除
@@ -4555,11 +4822,22 @@
                                 </div>
                             </div>
                         </div>
-                        {/* ★★★ 新增：右上角遊戲音樂混音器/開關 ★★★ */}
+                        {/* ★★★ 右上角遊戲音樂混音器/開關 ★★★ */}
                         <div className="absolute top-3 right-3 z-50 pointer-events-auto flex items-center gap-4">
-                            {/* ★★★ 操作說明文字 (透明背景) ★★★ */}
-                            <div className="text-white/90 text-xs font-bold tracking-wide select-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] hidden xl:block">
-                                Simple Triage And Rapid Treatment操作說明:鍵盤←↓ ↑→ &nbsp;&nbsp; 互動:E鍵或滑鼠左鍵 &nbsp;&nbsp; 道具欄:I鍵 &nbsp;&nbsp; 取消:C鍵或滑鼠右鍵
+                            {/* 文字與按鈕容器 (垂直排列) */}
+                            <div className="flex flex-col items-end gap-1 hidden xl:flex">
+                                {/* ★★★ 操作說明文字 (透明背景) ★★★ */}
+                                <div className="text-white/90 text-xs font-bold tracking-wide select-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] hidden xl:block">
+                                    Simple Triage And Rapid Treatment操作說明:鍵盤←↓ ↑→ &nbsp;&nbsp; 互動:E鍵或滑鼠左鍵 &nbsp;&nbsp; 道具欄:I鍵 &nbsp;&nbsp; 取消:C鍵或滑鼠右鍵
+                                </div>
+                                {/* ★★★ 檢傷流程圖按鈕 ★★★ */}
+                                <button
+                                    onClick={() => setShowFlowchart(true)}
+                                    className="px-2 py-1 bg-slate-700/80 hover:bg-slate-600 text-gray-200 text-xs rounded border border-slate-500 shadow-sm transition-all flex items-center gap-1"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><line x1="3" x2="21" y1="9" y2="9" /><line x1="9" x2="9" y1="21" y2="9" /></svg>
+                                    檢傷流程圖/Triage flowchart
+                                </button>
                             </div>
                             <button
                                 onClick={toggleAudio}
@@ -4654,10 +4932,72 @@
                                 </div>
                             )}
                         </div>
-                        {/* ★★★ 手機版 UI 控制層 (新增) ★★★ */}
-                        <div className="absolute inset-0 pointer-events-none z-[60]">
-                            {/* 虛擬搖桿 (左下) */}
-                            {/*<div
+                    </div>
+                    {/* ★★★ 新增：檢傷流程圖浮動視窗 (Modal) ★★★ */}
+                    {showFlowchart && (
+                        <div className="absolute inset-0 z-[200] bg-black flex items-center justify-center animate-fade-in" onClick={() => setShowFlowchart(false)}>
+                            <div
+                                className="relative bg-slate-900 w-full h-full flex flex-col items-center p-2"
+                                onClick={e => e.stopPropagation()}
+                            >
+                                {/* 右上角關閉按鈕 X */}
+                                <button
+                                    className="absolute top-2 right-2 text-gray-400 hover:text-white text-xl font-bold p-2 w-10 h-10 flex items-center justify-center bg-black/20 rounded-full transition-colors"
+                                    onClick={() => setShowFlowchart(false)}
+                                >
+                                    ✕
+                                </button>
+
+                                <h2 className="text-xl text-white font-bold mb-4 tracking-wider border-b border-gray-600 pb-2 w-full text-center">
+                                    檢傷分類流程圖 / Triage Flowchart
+                                </h2>
+
+                                {/* 圖片顯示區 */}
+                                <div className="flex-1 w-full flex items-center justify-center overflow-hidden bg-black/50 rounded mb-2 relative">
+                                    {flowchartIndex === 0 ? (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                            {/* ★★★ 預留程式碼插入位置 1：第一張圖片 ★★★ */}
+                                            {/* 請將下方的 src 替換為您的圖片路徑，例如 "PIC/flowchart1.png" */}
+                                            <img src="PIC/flowchart1.png" alt="流程圖 1" className="max-w-full max-h-full object-contain" />
+                                        </div>
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                            {/* ★★★ 預留程式碼插入位置 2：第二張圖片 ★★★ */}
+                                            {/* 請將下方的 src 替換為您的圖片路徑，例如 "PIC/flowchart2.png" */}
+                                            <img src="PIC/flowchart2.png" alt="流程圖 2" className="max-w-full max-h-full object-contain" />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 底部切換箭頭 */}
+                                <div className="flex gap-12 items-center pb-2">
+                                    <button
+                                        onClick={() => setFlowchartIndex(prev => (prev === 0 ? 1 : 0))}
+                                        className="text-white/70 hover:text-yellow-400 text-5xl font-bold transition-all transform hover:scale-110 active:scale-95 select-none"
+                                    >
+                                        ←
+                                    </button>
+
+                                    {/* 頁碼圓點指示器 */}
+                                    <div className="flex gap-3 items-center">
+                                        <div className={`w-3 h-3 rounded-full transition-all ${flowchartIndex === 0 ? 'bg-yellow-400 scale-125' : 'bg-gray-600'}`}></div>
+                                        <div className={`w-3 h-3 rounded-full transition-all ${flowchartIndex === 1 ? 'bg-yellow-400 scale-125' : 'bg-gray-600'}`}></div>
+                                    </div>
+
+                                    <button
+                                        onClick={() => setFlowchartIndex(prev => (prev === 0 ? 1 : 0))}
+                                        className="text-white/70 hover:text-yellow-400 text-5xl font-bold transition-all transform hover:scale-110 active:scale-95 select-none"
+                                    >
+                                        →
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {/* ★★★ 手機版 UI 控制層 (新增) ★★★ */}
+                    <div className="absolute inset-0 pointer-events-none z-[60]">
+                        {/* 虛擬搖桿 (左下) */}
+                        {/*<div
                                 className="joystick-zone pointer-events-auto"
                                 onTouchStart={handleJoystickTouchStart}
                                 onTouchMove={handleJoystickTouchMove}
@@ -4672,16 +5012,16 @@
                                 </div>
                             </div>
                             */}
-                            {/* 互動按鈕 (Interact - E) - 右下 */}
-                            {/*<div
+                        {/* 互動按鈕 (Interact - E) - 右下 */}
+                        {/*<div
                                 className="mobile-btn btn-interact pointer-events-auto"
                                 onTouchStart={(e) => { e.preventDefault(); triggerKey('e'); }}
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" /><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" /><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" /></svg>
                             </div>
                             */}
-                            {/* 取消按鈕 (Cancel - C) - 右上 */}
-                            {/*<div
+                        {/* 取消按鈕 (Cancel - C) - 右上 */}
+                        {/*<div
                                 className="mobile-btn btn-cancel pointer-events-auto"
                                 onTouchStart={(e) => { e.preventDefault(); triggerCancel(); }}
                             >
@@ -4689,18 +5029,18 @@
                             </div>
 
                             {/* 道具欄開關 (Inventory - I) - 中下 */}
-                            {/* <div
+                        {/* <div
                                 className="mobile-btn btn-inventory pointer-events-auto"
                                 onTouchStart={(e) => { e.preventDefault(); setShowInventory(prev => !prev); }}
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7" /><path d="M3 7l9-4 9 4" /><path d="M12 3v4" /></svg>
                             </div>
                             */}
-                        </div>
-
                     </div>
 
-                </div >
+                </div>
+
+
 
             );
 
@@ -4729,4 +5069,3 @@
 </body>
 
 </html>
-
