@@ -544,7 +544,7 @@
                 const createSmokeParticles = () => {
                     const container = document.getElementById('smoke-container');
                     if (!container) return;
-                    for (let i = 0; i < 15; i++) {
+                    for (let i = 0; i < 2; i++) {
                         let smoke = document.createElement('div');
                         smoke.className = 'smoke';
                         smoke.style.left = Math.random() * 100 + '%';
@@ -934,6 +934,7 @@
             const gameState = useRef({
                 isGameOver: false,
                 keys: { w: false, s: false, a: false, d: false },
+                isMouseDown: false,
                 player: {
                     x: 300, y: 600, width: 30, height: 30, speed: 1.75, dir: 3, frame: 0, moving: false, animTimer: 0,
                     gender: '男' // ★★★ 預設性別 ★★★
@@ -1857,10 +1858,82 @@
                 };
 
                 const handleMouseMove = (e) => {
+                    const state = gameState.current;
+                    if (state.isGameOver) return;
+
+                    // ▼ 新增：若滑鼠按住且正在移動模式，持續更新目標點
+                    if (state.isMouseDown && state.player.movingToTarget) {
+                        const rect = canvasRef.current.getBoundingClientRect();
+                        const scaleX = canvasRef.current.width / rect.width;
+                        const scaleY = canvasRef.current.height / rect.height;
+                        const screenX = (e.clientX - rect.left) * scaleX;
+                        const screenY = (e.clientY - rect.top) * scaleY;
+
+                        state.player.targetX = screenX + state.camera.x;
+                        state.player.targetY = screenY + state.camera.y;
+                    }
 
                 };
 
-                const handleCanvasClick = (e) => {
+                const handleMouseUp = () => {
+                    const state = gameState.current;
+                    state.isMouseDown = false;
+                    // 如果正在滑鼠導航移動中，放開即停止
+                    if (state.player.movingToTarget) {
+                        state.player.movingToTarget = false;
+                        state.player.moving = false; // 停止動畫
+                        // Optional: 清除目標點讓其停在原地
+                        state.player.targetX = state.player.x;
+                        state.player.targetY = state.player.y;
+                    }
+                };
+                // ★★★ 新增：針對平板/手機的觸控事件處理 (Touch Handlers) ★★★
+                const handleTouchStart = (e) => {
+                    // 關鍵：防止觸控時觸發網頁捲動或縮放
+                    if (e.cancelable) e.preventDefault();
+
+                    const touch = e.touches[0];
+                    // 將觸控事件轉發給 handleMouseDown，讓手指點擊等同於滑鼠左鍵
+                    handleMouseDown({
+                        clientX: touch.clientX,
+                        clientY: touch.clientY,
+                        preventDefault: () => { }
+                    });
+                };
+
+                const handleTouchMove = (e) => {
+                    if (e.cancelable) e.preventDefault();
+
+                    const touch = e.touches[0];
+                    // 將手指滑動轉發給 handleMouseMove，實現「按住拖曳」持續移動
+                    handleMouseMove({
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    });
+                };
+
+                const handleTouchEnd = (e) => {
+                    if (e.cancelable) e.preventDefault();
+                    // 手指離開時觸發滑鼠放開邏輯
+                    handleMouseUp();
+                };
+
+                // ★★★ 修改：事件監聽註冊區塊 (包含新的觸控事件) ★★★
+                window.addEventListener('keydown', handleKeyDown);
+                window.addEventListener('keyup', handleKeyUp);
+                window.addEventListener('contextmenu', handleContextMenu);
+                window.addEventListener('mousemove', handleMouseMove);
+
+                // 確保 canvas 存在再綁定
+                const cvs = canvasRef.current;
+                if (cvs) {
+                    cvs.addEventListener('mousedown', handleMouseDown);
+                    // 設定 passive: false 以便能使用 preventDefault() 鎖定畫面捲動
+                    cvs.addEventListener('touchstart', handleTouchStart, { passive: false });
+                    cvs.addEventListener('touchmove', handleTouchMove, { passive: false });
+                    cvs.addEventListener('touchend', handleTouchEnd, { passive: false });
+                }
+                const handleMouseDown = (e) => {
                     if (state.isGameOver) return;
 
                     const rect = canvas.getBoundingClientRect();
@@ -2385,11 +2458,18 @@
                         player.targetY = clickY;
                         player.movingToTarget = true;
                     }
+                    if (!clickedSomething && !state.placementMode.active) {
+                        // 移除原本的點擊回饋 "●"，改為持續移動狀態
+                        state.isMouseDown = true;
+                        player.targetX = clickX;
+                        player.targetY = clickY;
+                        player.movingToTarget = true;
+                    }
                 };
 
                 window.addEventListener('keydown', handleKeyDown);
                 window.addEventListener('keyup', handleKeyUp);
-                canvas.addEventListener('click', handleCanvasClick);
+                canvas.addEventListener('mousedown', handleMouseDown);
                 window.addEventListener('contextmenu', handleContextMenu);  // 新增：監聽右鍵
                 window.addEventListener('mousemove', handleMouseMove);
 
@@ -3879,7 +3959,7 @@
                         // 只有未被滅火的火焰會持續產生煙霧
                         if (h.type === 'fire' && !h.beingExtinguished) {
                             // 控制煙霧產生頻率 (0.7 = 30% 機率每幀產生)
-                            if (Math.random() > 0.7) {
+                            if (Math.random() > 0.9) {
                                 state.particles.push({
                                     x: h.x + (Math.random() - 0.5) * h.r,   // 在火焰範圍內隨機位置
                                     y: h.y - h.r * 0.5,                     // 從火焰上半部冒出
@@ -4243,11 +4323,16 @@
                     window.removeEventListener('resize', resize);
                     window.removeEventListener('keydown', handleKeyDown);
                     window.removeEventListener('keyup', handleKeyUp);
-                    canvas.removeEventListener('click', handleCanvasClick);
                     window.removeEventListener('contextmenu', handleContextMenu);
-                    // 移除監聽 // 移除 mousemove
                     window.removeEventListener('mousemove', handleMouseMove);
                     cancelAnimationFrame(state.animationFrameId);
+
+                    if (cvs) {
+                        cvs.removeEventListener('mousedown', handleMouseDown);
+                        cvs.removeEventListener('touchstart', handleTouchStart);
+                        cvs.removeEventListener('touchmove', handleTouchMove);
+                        cvs.removeEventListener('touchend', handleTouchEnd);
+                    }
                 };
             }, [gameOver, gameStarted]);
             useEffect(() => {
