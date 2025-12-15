@@ -1080,6 +1080,16 @@
                         life: 90,
                         vy: -0.5
                     });
+                    // ★★★ 新增：大聲公使用後，立即手動更新分類計數 (確保 UI 同步) ★★★
+                    // 修正：不再檢查 hasArrived，只要有標籤且在現場即算入
+                    const counts = { green: 0, yellow: 0, red: 0, black: 0 };
+                    state.survivors.forEach(s => {
+                        if (s.triageTag && !s.onAmbulance) {
+                            counts[s.triageTag]++;
+                        }
+                    });
+                    setTriageCounts(counts);
+
                     return;
                 }
 
@@ -1304,10 +1314,15 @@
                 ambulanceImg.src = 'PIC/ambulance.png'; // 請確保 PIC 資料夾內有 ambulance.png
                 assets.ambulance = ambulanceImg;
 
-                // ★★★ 新增：載入警車圖片 (預留插圖位置) ★★★
+                // ★★★ 載入警車圖片 (預留插圖位置) ★★★
                 const policeImg = new Image();
                 policeImg.src = 'PIC/police.png'; // 預留位置：請準備 police.png
                 assets.police = policeImg;
+
+                // ★★★ 載入小巴圖片 (預留插圖位置) ★★★
+                const minibusImg = new Image();
+                minibusImg.src = 'PIC/minibus.png'; // 預留位置：請確保 PIC 資料夾內有 minibus.png
+                assets.minibus = minibusImg;
 
                 // ★★★ 載入一般車輛插圖 (轎車/卡車) ★★★
                 const sedanImg = new Image();
@@ -1327,6 +1342,11 @@
                 vanImg.src = 'PIC/van.png'; // 預留位置：請準備 van.png
                 assets.van = vanImg;
 
+                // ★★★ 預留吉普車 (Jeep) 插圖位置 ★★★
+                const jeepImg = new Image();
+                jeepImg.src = 'PIC/jeep.png'; // 預留位置：請準備 jeep.png
+                assets.jeep = jeepImg;
+
                 // ★★★  載入石油 (Oil) 圖片 ★★★
                 const oilImg = new Image();
                 oilImg.src = 'PIC/oil.png'; // 請確保 PIC 資料夾內有 oil.png
@@ -1341,6 +1361,47 @@
                 const metalImg = new Image();
                 metalImg.src = 'PIC/metal.png'; // 請確保 PIC 資料夾內有 metal.png
                 assets.metal = metalImg;
+
+                // ★★★ 載入能量飲料 (Energy Drink) 圖片 ★★★
+                const energyDrinkImg = new Image();
+                energyDrinkImg.src = 'PIC/energy_drink.png'; // 預留位置：請確保 PIC 資料夾內有 energy_drink.png
+                assets.energy_drink = energyDrinkImg;
+
+                // 載入黑色區域 (Black Zone) 圖片 
+                const blackZoneImg = new Image();
+                blackZoneImg.src = 'PIC/black_zone.png'; // 預留位置：請確保 PIC 資料夾內有 black_zone.png
+                assets.black_zone = blackZoneImg;
+
+                // 載入紅色區域 (Red Zone) 圖片 
+                const redZoneImg = new Image();
+                redZoneImg.src = 'PIC/red_zone.png'; // 預留插圖位置：請確保 PIC 資料夾內有 red_zone.png
+                assets.red_zone = redZoneImg;
+
+                // 載入黃色區域 (Yellow Zone) 圖片 
+                const yellowZoneImg = new Image();
+                yellowZoneImg.src = 'PIC/yellow_zone.png'; // 預留插圖位置：請確保 PIC 資料夾內有 yellow_zone.png
+                assets.yellow_zone = yellowZoneImg;
+
+                //  載入綠色區域 (Green Zone) 圖片 
+                const greenZoneImg = new Image();
+                greenZoneImg.src = 'PIC/green_zone.png'; // 預留插圖位置：請確保 PIC 資料夾內有 green_zone.png
+                assets.green_zone = greenZoneImg;
+
+
+                // PIC 資料夾內有名為 command_post.png 的圖片
+                const commandPostImg = new Image();
+                commandPostImg.src = 'PIC/command_post1.png';
+                assets.command_post = commandPostImg;
+
+                // PIC 資料夾內有名為 decon.png 的圖片
+                const deconImg = new Image();
+                deconImg.src = 'PIC/decon1.png';
+                assets.decon = deconImg;
+
+                // 載入救護車待命區 (Ambulance Staging) 
+                const ambulanceStagingImg = new Image();
+                ambulanceStagingImg.src = 'PIC/ambulance_staging1.png'; // 請確保 PIC 資料夾內有 ambulance_staging.png
+                assets.ambulance_staging = ambulanceStagingImg;
 
                 const ctx = canvas.getContext('2d');
                 const state = gameState.current;
@@ -1395,9 +1456,12 @@
                     const counts = { green: 0, yellow: 0, red: 0, black: 0 };
                     state.survivors.forEach(s => {
                         // 計算已抵達對應區域的傷患
-                        if (s.hasArrived && s.triageTag) {
+                        // ★★★ 修正：排除已上救護車的傷患 (避免安置人數與後送人數重複計算) ★★★
+                        if (s.triageTag && !s.onAmbulance) {
                             counts[s.triageTag] = counts[s.triageTag] + 1;
+
                         }
+
                     });
                     setTriageCounts(counts);
                 };
@@ -1527,6 +1591,7 @@
                     } else if (type === 'van') {
                         baseW = 120; baseH = 120; // 廂型車介於中間
                     }
+
                     // 轎車(sedan) 維持 100x100
 
                     let w = (rotated ? baseH : baseW);
@@ -1572,11 +1637,11 @@
                             // 決定生成區域
                             if (car && Math.random() > 0.4) {
                                 // 策略 A: 在車輛「附近」生成 (範圍稍大，允許靠近)
-                                sx = car.x + rand(-60, car.w + 60);
-                                sy = car.y + rand(-60, car.h + 60);
+                                sx = car.x + rand(-30, car.w + 30);
+                                sy = car.y + rand(-30, car.h + 30);
                             } else {
                                 // 策略 B: 全地圖隨機
-                                sx = rand(300 + LEFT_EXPANSION, WORLD_WIDTH - 150);
+                                sx = rand(350 + LEFT_EXPANSION, WORLD_WIDTH - 150);
                                 sy = rand(150, WORLD_HEIGHT - 150);
                             }
 
@@ -2604,25 +2669,27 @@
                             ctx.fillStyle = '#7f8c8d'; ctx.fillRect(-5, -v.h / 2 + 2, 10, v.h - 4);
                         }
                     }
-                    // ★★★ 新增：繪製小巴 (黃色外觀) ★★★
+                    // ★★★ 新增：繪製小巴 (若有圖片則繪製圖片) ★★★
                     else if (v.type === 'mini_bus') {
-                        drawRoundedRect(-v.w / 2, -v.h / 2, v.w, v.h, 8, '#f1c40f'); // 黃色車身
-                        ctx.fillStyle = '#2c3e50';
-                        // 車窗 (長條型)
-                        ctx.fillRect(-v.w / 2 + 10, -v.h / 2 + 5, v.w - 20, v.h - 10);
-                        // 車頂燈
-                        ctx.fillStyle = '#e67e22';
-                        ctx.fillRect(-10, -6, 20, 12);
+                        const minibusImg = assets.minibus;
+
+                        // 檢查圖片是否載入成功
+                        if (minibusImg && minibusImg.complete && minibusImg.naturalWidth !== 0) {
+                            // 繪製圖片 (填滿車輛尺寸)
+                            ctx.drawImage(minibusImg, -v.w / 2, -v.h / 2, v.w, v.h);
+                        } else {
+                            // (備案) 若無圖片，維持原本的向量繪製邏輯 (黃色車身)
+                            drawRoundedRect(-v.w / 2, -v.h / 2, v.w, v.h, 8, '#f1c40f');
+                            ctx.fillStyle = '#2c3e50';
+                            // 車窗 (長條型)
+                            ctx.fillRect(-v.w / 2 + 10, -v.h / 2 + 5, v.w - 20, v.h - 10);
+                            // 車頂燈
+                            ctx.fillStyle = '#e67e22';
+                            ctx.fillRect(-10, -6, 20, 12);
+                        }
                     }
-                    ctx.shadowBlur = 20;
-                    if (Math.floor(Date.now() / 200) % 2 === 0) {
-                        ctx.shadowColor = 'red'; ctx.fillStyle = 'rgba(255, 0, 0, 0.9)'; ctx.beginPath(); ctx.arc(-10, 0, 6, 0, Math.PI * 2); ctx.fill();
-                        ctx.shadowColor = 'blue'; ctx.fillStyle = 'rgba(0, 0, 255, 0.9)'; ctx.beginPath(); ctx.arc(10, 0, 6, 0, Math.PI * 2); ctx.fill();
-                    } else {
-                        ctx.shadowColor = 'blue'; ctx.fillStyle = 'rgba(0, 0, 255, 0.9)'; ctx.beginPath(); ctx.arc(-10, 0, 6, 0, Math.PI * 2); ctx.fill();
-                        ctx.shadowColor = 'red'; ctx.fillStyle = 'rgba(255, 0, 0, 0.9)'; ctx.beginPath(); ctx.arc(10, 0, 6, 0, Math.PI * 2); ctx.fill();
-                    }
-                    ctx.shadowBlur = 0;
+
+
                     ctx.restore();
                 };
 
@@ -3098,25 +3165,212 @@
                 const drawTriageMats = (mats) => {
                     mats.forEach(m => {
                         ctx.save();
+                        // ★★★ 新增：紅色區域繪製邏輯 (優先使用圖片) ★★★
+                        if (m.color === 'red' && assets.red_zone && assets.red_zone.complete && assets.red_zone.naturalWidth !== 0) {
+                            // ★★★ 修改：自定義圖片尺寸 (可在此處修改寬高數值) ★★★
+                            const drawW = 200; // 自定義寬度 (原 m.w 約為 100-160)
+                            const drawH = 200; // 自定義高度
+
+                            // 計算置中位置 (讓圖片中心對齊區域中心)
+                            const drawX = m.x + (m.w - drawW) / 2;
+                            const drawY = m.y + (m.h - drawH) / 2;
+                            // 1. 繪製圖片 (填滿區域)(使用自定義尺寸)
+                            ctx.drawImage(assets.red_zone, drawX, drawY, drawW, drawH);
+
+                            // 2. 繪製文字標籤 (加上黑色陰影以確保在圖片上清晰可見)
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 16px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.shadowColor = 'black';
+                            ctx.shadowBlur = 4;
+                            ctx.fillText('重傷區', m.x + m.w / 2, m.y + m.h / 2);
+
+                            ctx.shadowBlur = 0; // 重置陰影
+                            ctx.restore();
+                            return; // ★ 成功繪製圖片後，直接結束函式
+                        }
+                        // ★★★ 新增：黃色區域繪製邏輯 (優先使用圖片) ★★★
+                        if (m.color === 'yellow' && assets.yellow_zone && assets.yellow_zone.complete && assets.yellow_zone.naturalWidth !== 0) {
+                            // ★★★ 修改：自定義圖片尺寸 (可在此處修改寬高數值) ★★★
+                            const drawW = 150; // 自定義寬度
+                            const drawH = 150; // 自定義高度
+
+                            // 計算置中位置 (讓圖片中心對齊區域中心)
+                            const drawX = m.x + (m.w - drawW) / 2;
+                            const drawY = m.y + (m.h - drawH) / 2;
+
+                            // 1. 繪製圖片 (使用自定義尺寸)
+                            ctx.drawImage(assets.yellow_zone, drawX, drawY, drawW, drawH);
+
+                            // 2. 繪製文字標籤 (加上黑色陰影以確保在圖片上清晰可見)
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 16px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.shadowColor = 'black';
+                            ctx.shadowBlur = 4;
+                            ctx.fillText('中傷區', m.x + m.w / 2, m.y + m.h / 2);
+
+                            ctx.shadowBlur = 0; // 重置陰影
+                            ctx.restore();
+                            return; // ★ 成功繪製圖片後，直接結束函式
+                        }
+                        // ★★★ 新增：綠色區域繪製邏輯 (優先使用圖片) ★★★
+                        if (m.color === 'green' && assets.green_zone && assets.green_zone.complete && assets.green_zone.naturalWidth !== 0) {
+                            // ★★★ 修改：自定義圖片尺寸 (可在此處修改寬高數值) ★★★
+                            const drawW = 150; // 自定義寬度
+                            const drawH = 150; // 自定義高度
+
+                            // 計算置中位置 (讓圖片中心對齊區域中心)
+                            const drawX = m.x + (m.w - drawW) / 2;
+                            const drawY = m.y + (m.h - drawH) / 2;
+
+                            // 1. 繪製圖片 (使用自定義尺寸)
+                            ctx.drawImage(assets.green_zone, drawX, drawY, drawW, drawH);
+
+                            // 2. 繪製文字標籤 (加上黑色陰影以確保在圖片上清晰可見)
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 16px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.shadowColor = 'black';
+                            ctx.shadowBlur = 4;
+                            ctx.fillText('輕傷區', m.x + m.w / 2, m.y + m.h / 2);
+
+                            ctx.shadowBlur = 0; // 重置陰影
+                            ctx.restore();
+                            return; // ★ 成功繪製圖片後，直接結束函式
+                        }
+                        // ★★★ 新增：黑色區域繪製邏輯 (優先使用圖片) ★★★
+                        if (m.color === 'black' && assets.black_zone && assets.black_zone.complete && assets.black_zone.naturalWidth !== 0) {
+                            // ★★★ 修改：自定義圖片尺寸 (可在此處修改寬高數值) ★★★
+                            const drawW = 150; // 自定義寬度 
+                            const drawH = 150; // 自定義高度
+
+                            // 計算置中位置 (讓圖片中心對齊區域中心)
+                            const drawX = m.x + (m.w - drawW) / 2;
+                            const drawY = m.y + (m.h - drawH) / 2;
+                            // 1. 繪製圖片 (填滿區域)(使用自定義尺寸)
+                            ctx.drawImage(assets.black_zone, drawX, drawY, drawW, drawH);
+
+                            // 2. 繪製文字標籤 (加上黑色陰影以確保在圖片上清晰可見)
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 16px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.shadowColor = 'black';
+                            ctx.shadowBlur = 4;
+                            ctx.fillText('臨時停屍間', m.x + m.w / 2, m.y + m.h / 2);
+
+                            ctx.shadowBlur = 0; // 重置陰影
+                            ctx.restore();
+                            return; // ★ 成功繪製圖片後，直接結束函式
+                        }
+                        // ★★★ 修改：若為指揮站且圖片已載入，優先繪製圖片 ★★★
+                        if (m.color === 'command_post' && assets.command_post && assets.command_post.complete && assets.command_post.naturalWidth !== 0) {
+                            // 1. 繪製指揮站圖片 (填滿區域)
+                            ctx.drawImage(assets.command_post, m.x, m.y, m.w, m.h);
+
+                            // 2. 繪製文字標籤 (加上黑色陰影以確保在圖片上清晰可見)
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 16px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.shadowColor = 'black';
+                            ctx.shadowBlur = 4;
+                            ctx.fillText('指揮站', m.x + m.w / 2, m.y + m.h / 2);
+
+                            // 3. 繪製 HP/MP 恢復動態提示 (保持與原版一致的動畫)
+                            const blink = Math.sin(state.frameCount * 0.1) * 3;
+                            ctx.fillStyle = '#2ecc71'; // 綠色 HP
+                            ctx.font = 'bold 20px Arial';
+                            // 繪製 "+ HP"
+                            ctx.fillText('+', m.x + m.w / 2 - 10, m.y + m.h / 2 + 30 + blink);
+                            ctx.fillText('HP', m.x + m.w / 2 + 5, m.y + m.h / 2 + 30 + blink);
+
+                            ctx.shadowBlur = 0; // 重置陰影
+                            ctx.restore();
+                            return; // ★ 成功繪製圖片後，直接結束此物件的繪製，跳過下方的 fallback
+                        }
+                        // ★★★ 新增：若為除汙站且圖片已載入，優先繪製圖片 ★★★
+                        if (m.color === 'decon' && assets.decon && assets.decon.complete && assets.decon.naturalWidth !== 0) {
+                            // 1. 繪製除汙站圖片 (填滿區域)
+                            ctx.drawImage(assets.decon, m.x, m.y, m.w, m.h);
+
+                            // 2. 繪製文字標籤 (加上黑色陰影以確保在圖片上清晰可見)
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 16px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.shadowColor = 'black';
+                            ctx.shadowBlur = 4;
+                            ctx.fillText('除汙站', m.x + m.w / 2, m.y + m.h / 2);
+
+                            ctx.shadowBlur = 0; // 重置陰影
+                            ctx.restore();
+                            return; // ★ 成功繪製圖片後，直接結束函式，跳過下方的 fallback
+                        }
+                        // ★★★ 新增：若為救護車待命區且圖片已載入，優先繪製圖片 ★★★
+                        if (m.color === 'ambulance_staging' && assets.ambulance_staging && assets.ambulance_staging.complete && assets.ambulance_staging.naturalWidth !== 0) {
+                            // 1. 繪製救護車待命區圖片 (填滿區域)
+                            ctx.drawImage(assets.ambulance_staging, m.x, m.y, m.w, m.h);
+
+                            // 2. 繪製文字標籤 (加上黑色陰影以確保在圖片上清晰可見)
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 16px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.shadowColor = 'black';
+                            ctx.shadowBlur = 4;
+                            ctx.fillText('救護車待命區', m.x + m.w / 2, m.y + m.h / 2);
+
+                            ctx.shadowBlur = 0; // 重置陰影
+                            ctx.restore();
+                            return; // ★ 成功繪製圖片後，直接結束函式
+                        }
+                        // --- 以下為原本的色塊繪製邏輯 (Fallback / 其他區域使用) ---
                         const colors = {
-                            'green': 'rgba(46, 204, 113, 0.4)', 'yellow': 'rgba(241, 196, 15, 0.4)', 'red': 'rgba(231, 76, 60, 0.4)', 'black': 'rgba(44, 62, 80, 0.6)', 'command_post': 'rgba(255, 255, 255, 0.4)',
-                            'ambulance_staging': 'rgba(52, 152, 219, 0.4)', 'decon': 'rgba(149, 165, 166, 0.4)'
+                            'green': 'rgba(46, 204, 113, 0.4)',
+                            'yellow': 'rgba(241, 196, 15, 0.4)',
+                            'red': 'rgba(231, 76, 60, 0.4)',
+                            'black': 'rgba(44, 62, 80, 0.6)',
+                            'command_post': 'rgba(255, 255, 255, 0.4)',
+                            'ambulance_staging': 'rgba(52, 152, 219, 0.4)',
+                            'decon': 'rgba(149, 165, 166, 0.4)'
                         };
                         ctx.fillStyle = colors[m.color] || 'rgba(255,255,255,0.2)';
                         ctx.fillRect(m.x, m.y, m.w, m.h);
-                        const borderColors = { 'green': '#2ecc71', 'yellow': '#f1c40f', 'red': '#e74c3c', 'black': '#2c3e50' };
+
+                        const borderColors = {
+                            'green': '#2ecc71',
+                            'yellow': '#f1c40f',
+                            'red': '#e74c3c',
+                            'black': '#2c3e50'
+                        };
                         ctx.strokeStyle = borderColors[m.color] || '#fff';
                         ctx.lineWidth = 2;
                         ctx.strokeRect(m.x, m.y, m.w, m.h);
+
                         ctx.fillStyle = '#fff';
                         ctx.font = 'bold 16px Arial';
-                        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                        const labels = { 'green': '輕傷區', 'yellow': '中傷區', 'red': '重傷區', 'black': '臨時停屍間', 'command_post': '指揮站', 'ambulance_staging': '救護車待命區', 'decon': '除汙區' };
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        const labels = {
+                            'green': '輕傷區',
+                            'yellow': '中傷區',
+                            'red': '重傷區',
+                            'black': '臨時停屍間',
+                            'command_post': '指揮站',
+                            'ambulance_staging': '救護車待命區',
+                            'decon': '除汙區'
+                        };
                         ctx.fillText(labels[m.color], m.x + m.w / 2, m.y + m.h / 2);
-                        // 如果是指揮站，額外繪製一個恢復圖示 (例如 +HP)
+
+                        // 如果是指揮站 (無圖片時的 fallback)，額外繪製恢復圖示
                         if (m.color === 'command_post') {
                             const blink = Math.sin(state.frameCount * 0.1) * 3;
-                            ctx.fillStyle = '#2ecc71'; // 綠色
+                            ctx.fillStyle = '#2ecc71';
                             ctx.font = 'bold 20px Arial';
                             ctx.fillText('+', m.x + m.w / 2 - 10, m.y + m.h / 2 + 30 + blink);
                             ctx.fillText('HP', m.x + m.w / 2 + 5, m.y + m.h / 2 + 30 + blink);
@@ -3124,6 +3378,7 @@
                         ctx.restore();
                     });
                 };
+
                 // ★★★ 新增：繪製互動提示箭頭 (與設置區域風格一致) ★★
                 const drawPlacementPreview = (mode) => {
                     if (!mode.active) return;
@@ -3287,14 +3542,17 @@
                     state.frameCount++;
                     // ★★★ 新增：能量飲料生成邏輯 (每30秒 = 1800 frames) ★★★
                     state.energySpawnTimer++;
-                    if (state.energySpawnTimer > 1800) {
+                    if (state.energySpawnTimer > 3600) {
                         state.energySpawnTimer = 0;
                         // 最多同時存在 3 罐
                         if (state.energyDrinks.length < 3) {
+                            const minX = (50 + 700) + 200; // 起始點約 950
+                            const maxX = WORLD_WIDTH - 150; // 終點
                             // 消防車位於 50 + LEFT_EXPANSION (約 750)，寬 140
                             // 生成於消防車右側區域 (約 X: 950 ~ 1150)
-                            const spawnX = (50 + 700) + 200 + Math.random() * 200;
-                            const spawnY = 200 + Math.random() * (1200 - 400); // 隨機高度
+                            const spawnX = minX + Math.random() * (maxX - minX);
+                            // Y軸範圍：避開上下邊界 (與傷患生成邏輯類似)
+                            const spawnY = 150 + Math.random() * (WORLD_HEIGHT - 300);
 
                             // 簡單避開障礙物檢查
                             let safe = true;
@@ -3793,7 +4051,12 @@
                     const isTryingToMove = state.keys.w || state.keys.s || state.keys.a || state.keys.d;
                     let speed = p.speed;
 
-                    if (isTryingToMove) {
+                    // 定義「正在移動」的狀態 (包含 鍵盤、滑鼠導航、虛擬搖桿) ★★★
+                    // 這樣無論是用滑鼠點擊移動還是搖桿，都會正確扣除 SP
+                    const isPlayerMoving = isTryingToMove || p.movingToTarget || joystickRef.current.active;
+
+
+                    if (isPlayerMoving) {
                         // ★★★ 修改：若有 SP Buff (spBuffTimer > 0) 則不扣 SP ★★★
                         if (state.spBuffTimer <= 0) {
                             state.stats.sp = Math.max(0, state.stats.sp - 0.2);
@@ -4144,8 +4407,8 @@
                                     ctx.translate(o.x + o.w / 2, o.y + o.h / 2);
                                     ctx.rotate(o.angle);
                                     // 設定圖片尺寸 (根據物件 w, h 調整)
-                                    const scale =2.0;
-                                     ctx.drawImage(img, -o.w * scale / 2, -o.h * scale / 2, o.w * scale, o.h * scale);
+                                    const scale = 2.0;
+                                    ctx.drawImage(img, -o.w * scale / 2, -o.h * scale / 2, o.w * scale, o.h * scale);
                                     ctx.restore();
                                 } else {
                                     // (備案) 原本的向量繪製邏輯
@@ -4244,6 +4507,8 @@
                         // ★★★ 能量飲料繪製邏輯 ★★★
                         else if (item.type === 'energy_drink') {
                             const d = item.obj;
+                            const img = assets.energy_drink; // 取得圖片資源
+
                             ctx.save();
                             // 浮動動畫
                             const floatY = Math.sin(state.frameCount * 0.1 + d.floatOffset) * 5;
@@ -4253,24 +4518,40 @@
                             ctx.fillStyle = 'rgba(0,0,0,0.3)';
                             ctx.beginPath(); ctx.ellipse(0, 15 - floatY, 10, 4, 0, 0, Math.PI * 2); ctx.fill();
 
-                            // 罐身
-                            drawRoundedRect(-10, -15, 20, 30, 4, '#3498db'); // 藍色罐體
-                            // 罐蓋
-                            ctx.fillStyle = '#bdc3c7';
-                            ctx.fillRect(-10, -15, 20, 4);
-                            // 閃電標誌
-                            ctx.fillStyle = '#f1c40f';
-                            ctx.beginPath();
-                            ctx.moveTo(2, -8); ctx.lineTo(-6, 2); ctx.lineTo(0, 2);
-                            ctx.lineTo(-2, 10); ctx.lineTo(6, 0); ctx.lineTo(0, 0);
-                            ctx.closePath(); ctx.fill();
+                            // ★★★ 檢查圖片是否載入成功 ★★★
+                            if (img && img.complete && img.naturalWidth !== 0) {
+                                // 設定圖片顯示尺寸 (可依圖片比例自行調整，此處設為 30x40)
+                                const w = 40;
+                                const h = 40;
+                                // 繪製圖片 (置中)
+                                ctx.drawImage(img, -w / 2, -h / 2, w, h);
 
-                            // 發光特效
-                            ctx.shadowColor = '#00ffff';
-                            ctx.shadowBlur = 10;
-                            ctx.strokeStyle = 'white';
-                            ctx.lineWidth = 1;
-                            ctx.strokeRect(-10, -15, 20, 30);
+                                // 選填：保留發光特效增強辨識度
+                                ctx.shadowColor = '#00ffff';
+                                ctx.shadowBlur = 15;
+                                ctx.globalCompositeOperation = 'screen'; // 讓光暈更亮
+                                ctx.drawImage(img, -w / 2, -h / 2, w, h);
+                            } else {
+                                // (備案) 若無圖片，維持原本的程式碼繪製
+                                // 罐身
+                                drawRoundedRect(-10, -15, 20, 30, 4, '#3498db'); // 藍色罐體
+                                // 罐蓋
+                                ctx.fillStyle = '#bdc3c7';
+                                ctx.fillRect(-10, -15, 20, 4);
+                                // 閃電標誌
+                                ctx.fillStyle = '#f1c40f';
+                                ctx.beginPath();
+                                ctx.moveTo(2, -8); ctx.lineTo(-6, 2); ctx.lineTo(0, 2);
+                                ctx.lineTo(-2, 10); ctx.lineTo(6, 0); ctx.lineTo(0, 0);
+                                ctx.closePath(); ctx.fill();
+
+                                // 發光特效
+                                ctx.shadowColor = '#00ffff';
+                                ctx.shadowBlur = 10;
+                                ctx.strokeStyle = 'white';
+                                ctx.lineWidth = 1;
+                                ctx.strokeRect(-10, -15, 20, 30);
+                            }
 
                             ctx.restore();
                         }
@@ -4881,6 +5162,15 @@
                                                         if (shouldDepart) {
                                                             veh.state = 'departing';
                                                         }
+                                                        // ★★★ 新增：立即重新計算安置人數 (因為有人上車了，要從安置名單扣除) ★★★
+                                                        const counts = { green: 0, yellow: 0, red: 0, black: 0 };
+                                                        gameState.current.survivors.forEach(s => {
+                                                            if (s.hasArrived && s.triageTag && !s.onAmbulance) {
+                                                                counts[s.triageTag]++;
+                                                            }
+                                                        });
+                                                        setTriageCounts(counts);
+
                                                         forceUpdate(prev => prev + 1);
                                                     } else {
                                                         if (veh.type === 'mini_bus') {
@@ -4944,12 +5234,17 @@
                                         })()}
                                     </div>
                                 </div>
-                                {/* ★★★ 補回：右側 檢傷資訊列表 (這段消失了，請補上) ★★★ */}
+                                {/* ★★★ 檢傷資訊列表 ★★★ */}
                                 <div className="absolute top-16 right-4 w-72 bg-slate-900/95 border-2 border-green-500 rounded-lg shadow-[0_0_30px_rgba(34,197,94,0.3)] p-4 text-white z-50 max-h-[80vh] overflow-y-auto font-sans animate-fade-in custom-scrollbar">
                                     <div className="flex justify-between items-center mb-4 border-b border-green-500/50 pb-2">
-                                        <h2 className="text-lg font-bold text-green-400 flex items-center gap-2">
-                                            📋 傷患名單
-                                        </h2>
+                                        <div className="flex items-end gap-2">
+                                            <h2 className="text-lg font-bold text-green-400 flex items-center gap-2">
+                                                📋 傷患名單
+                                            </h2>
+                                            <span className="text-sm font-bold text-gray-300 leading-none mb-0.5">
+                                                目前共 {survivorCount} 名
+                                            </span>
+                                        </div>
                                         <span className="text-xs text-gray-400">點擊選擇傷患</span>
                                     </div>
                                     <div className="space-y-2">
@@ -5354,4 +5649,3 @@
 </body>
 
 </html>
-
