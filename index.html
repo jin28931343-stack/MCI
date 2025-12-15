@@ -691,13 +691,9 @@
             const [showMatSelector, setShowMatSelector] = useState(false);
             // 控制道具欄顯示的狀態 (預設隱藏，按 I 切換) 
             const [showInventory, setShowInventory] = useState(false);
-            // 音訊控制相關 State 與 Ref 
-            const audioCtxRef = useRef(null);
+            // 音訊控制修改： MP3 播放 
+            const bgmRef = useRef(null); // 用於儲存 Audio 物件
             const [isMuted, setIsMuted] = useState(true);
-            const isMutedRef = useRef(true); // 用於在 Scheduler 中讀取
-            const nextNoteTimeRef = useRef(0);
-            const schedulerTimerRef = useRef(null);
-            const sequenceStepRef = useRef(0);
             const [score, setScore] = useState(0);
             // ★★★ 虛擬搖桿與按鈕 Ref ★★★
             const joystickRef = useRef({ active: false, identifier: null, baseX: 0, baseY: 0, vecX: 0, vecY: 0 });
@@ -705,8 +701,39 @@
             // 用於將 useEffect 內部的 handler 暴露給外部 JSX 使用
             const keyDownHandlerRef = useRef(null);
             const cancelActionRef = useRef(null);
-            // 同步靜音狀態到 Ref
-            useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+
+            // ★★★ 初始化 BGM (MP3) ★★★
+            useEffect(() => {
+                // 建立 Audio 物件，路徑設定為 PIC/.mp3
+                const audio = new Audio('PIC/bgm.mp3');
+                audio.loop = true; // 設定循環播放
+                audio.volume = 0.5; // 設定音量 (0.0 ~ 1.0)
+                bgmRef.current = audio;
+
+                // 組件卸載時的清理
+                return () => {
+                    if (bgmRef.current) {
+                        bgmRef.current.pause();
+                        bgmRef.current = null;
+                    }
+                };
+            }, []);
+
+            // ★★★ 開關音樂函式 (MP3 版本) ★★★
+            const toggleAudio = () => {
+                const newVal = !isMuted;
+                setIsMuted(newVal);
+
+                if (bgmRef.current) {
+                    if (!newVal) { // 開啟音樂 (解除靜音)
+                        // 使用 catch 處理可能的瀏覽器自動播放限制錯誤
+                        bgmRef.current.play().catch(e => console.error("BGM 播放失敗 (請確認 PIC 資料夾內有 bgm.mp3):", e));
+                    } else { // 靜音 (暫停)
+                        bgmRef.current.pause();
+                    }
+                }
+            };
+
             const handleJoystickTouchStart = (e) => {
                 e.preventDefault();
                 const touch = e.changedTouches[0];
@@ -778,133 +805,7 @@
             const triggerCancel = () => {
                 if (cancelActionRef.current) cancelActionRef.current();
             };
-            // ★★★ 初始化音訊環境 (8-bit Synth) ★★★
-            const initAudio = () => {
-                if (!audioCtxRef.current) {
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    audioCtxRef.current = new AudioContext();
-                }
-                if (audioCtxRef.current.state === 'suspended') {
-                    audioCtxRef.current.resume();
-                }
-            };
 
-            // ★★★ 播放單音 (Oscillator) ★★★
-            const playOscillator = (freq, type, startTime, duration, vol) => {
-                if (!audioCtxRef.current || isMutedRef.current) return;
-                const ctx = audioCtxRef.current;
-                const osc = ctx.createOscillator();
-                const gainNode = ctx.createGain();
-
-                osc.type = type; // square, sawtooth, triangle
-                osc.frequency.setValueAtTime(freq, startTime);
-
-                // 簡單的 Envelope
-                gainNode.gain.setValueAtTime(vol, startTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-
-                osc.connect(gainNode);
-                gainNode.connect(ctx.destination);
-
-                osc.start(startTime);
-                osc.stop(startTime + duration);
-            };
-
-            // ★★★ 播放鼓聲 (Noise) ★★★
-            const playDrum = (startTime) => {
-                if (!audioCtxRef.current || isMutedRef.current) return;
-                const ctx = audioCtxRef.current;
-                const bufferSize = ctx.sampleRate * 0.1;
-                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) {
-                    data[i] = Math.random() * 2 - 1;
-                }
-                const noise = ctx.createBufferSource();
-                noise.buffer = buffer;
-                const gain = ctx.createGain();
-                // 高通濾波模擬 Hi-hat
-                const filter = ctx.createBiquadFilter();
-                filter.type = 'highpass';
-                filter.frequency.value = 1000;
-
-                noise.connect(filter);
-                filter.connect(gain);
-                gain.connect(ctx.destination);
-
-                gain.gain.setValueAtTime(0.05, startTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.05);
-                noise.start(startTime);
-            }
-
-            // ★★★ 音樂排程器 (Music Loop) ★★★
-            const scheduler = () => {
-                if (!audioCtxRef.current) return;
-                const lookahead = 25.0; // 毫秒
-                const scheduleAheadTime = 0.1; // 秒
-                const bpm = 130; // 緊張節奏
-                const secondsPerBeat = 60.0 / bpm;
-                const ctx = audioCtxRef.current;
-
-                while (nextNoteTimeRef.current < ctx.currentTime + scheduleAheadTime) {
-                    scheduleNote(sequenceStepRef.current, nextNoteTimeRef.current);
-                    nextNoteTimeRef.current += secondsPerBeat / 4; // 16分音符
-                    sequenceStepRef.current = (sequenceStepRef.current + 1) % 16;
-                }
-                schedulerTimerRef.current = setTimeout(scheduler, lookahead);
-            };
-
-            // ★★★ 樂句編曲 (Pattern) ★★★
-            const scheduleNote = (step, time) => {
-                if (isMutedRef.current) return;
-
-                // 1. Bassline (Driving Square Wave)
-                // Pattern: C2... Eb2... G2...
-                const root = 65.41; // C2
-                const flat3 = 77.78; // Eb2
-                const fifth = 98.00; // G2
-
-                let freq = root;
-                if (step >= 8 && step < 12) freq = flat3;
-                if (step >= 12) freq = fifth;
-
-                if (step % 2 === 0) { // 8th notes
-                    playOscillator(freq, 'square', time, 0.1, 0.1);
-                }
-
-                // 2. High Arp (Emergency Alarm Feel)
-                if (step === 0 || step === 8) {
-                    playOscillator(523.25, 'sawtooth', time, 0.1, 0.03); // C5
-                }
-                if (step === 4 || step === 12) {
-                    playOscillator(783.99, 'sawtooth', time, 0.1, 0.03); // G5
-                }
-
-                // 3. Rhythm (Tick)
-                if (step % 4 === 0) {
-                    playDrum(time);
-                }
-            };
-
-            // ★★★ 開關音樂函式 ★★★
-            const toggleAudio = () => {
-                const newVal = !isMuted;
-                setIsMuted(newVal);
-                if (!newVal) { // 開啟音樂
-                    initAudio();
-                    if (!schedulerTimerRef.current) {
-                        nextNoteTimeRef.current = audioCtxRef.current.currentTime + 0.1;
-                        scheduler();
-                    }
-                } else {
-                    // 靜音時不需特別停止 Context，只需讓 scheduleNote 不發聲即可，保持同步
-                }
-            };
-
-            // 清除 Timer
-            useEffect(() => {
-                return () => clearTimeout(schedulerTimerRef.current);
-            }, []);
             const statsTracker = useRef({
                 tourniquet: { correct: 0, total: 0 },
                 airway: { correct: 0, total: 0 },
