@@ -567,12 +567,32 @@
                 </div>
             );
         };
-
+        // 需預載的資源清單 (放在 IntroScreen 之前) 
+        const PRELOAD_ASSETS = [
+            'PIC/survivor_man.png', 'PIC/survivor_woman.png',
+            'PIC/player_man.png', 'PIC/player_woman.png',
+            'PIC/fire.png', 'PIC/water.png', 'PIC/breaker.png', 'PIC/emt.png',
+            'PIC/firefighter.png', 'PIC/firetruck.png', 'PIC/ambulance.png', 'PIC/police.png',
+            'PIC/minibus.png', 'PIC/sedan.png', 'PIC/truck.png', 'PIC/suv.png', 'PIC/van.png', 'PIC/jeep.png',
+            'PIC/oil.png', 'PIC/glass.png', 'PIC/metal.png', 'PIC/energy_drink.png',
+            'PIC/black_zone.png', 'PIC/red_zone.png', 'PIC/yellow_zone.png', 'PIC/green_zone.png',
+            'PIC/command_post1.png', 'PIC/decon1.png', 'PIC/ambulance_staging1.png',
+            'PIC/icon_green.png', 'PIC/icon_yellow.png', 'PIC/icon_red.png', 'PIC/icon_black.png'
+        ];
         // === IntroScreen 組件 ===
         const IntroScreen = ({ onStart }) => {
             const [showStartBtn, setShowStartBtn] = useState(false);
             // 追蹤是否已互動 (點擊) 的狀態 
             const [hasInteracted, setHasInteracted] = useState(false);
+            // 背景預載邏輯 
+            // 利用開頭動畫的時間，偷偷在背景載入圖片至瀏覽器快取
+            useEffect(() => {
+                PRELOAD_ASSETS.forEach(src => {
+                    const img = new Image();
+                    img.src = src;
+                    // 圖片載入後會存於快取中，進入主遊戲時再次請求即無需等待
+                });
+            }, []);
             // 開頭動畫音樂控制邏輯 
             useEffect(() => {
                 // 建立 Audio 物件 (請確保 PIC 資料夾內有 intro.mp3，或自行修改為 bgm.mp3)
