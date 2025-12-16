@@ -784,7 +784,7 @@
                         />
                         {/* 閃爍提示文字 (只有在尚未互動時顯示) */}
                         {!hasInteracted && (
-                            <div className="click-hint">請點擊畫面任意處開始</div>
+                            <div className="click-hint" style={{ pointerEvents: 'none' }}>請點擊畫面任意處開始</div>
                         )}
                         <div id="siren-overlay" className="siren-overlay"></div>
                         <div className="road">
