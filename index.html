@@ -40,6 +40,24 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
+        /* === 新增：點擊提示文字樣式 === */
+        .click-hint {
+            position: absolute;
+            bottom: 15%;
+            /* 位於畫面下方 */
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            font-family: 'DotGothic16', sans-serif;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            animation: blink 1.5s infinite;
+            /* 使用既有的 blink 動畫 */
+            z-index: 60;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
         body {
             margin: 0;
             padding: 0;
@@ -245,18 +263,20 @@
             background: linear-gradient(to bottom, #111 0%, #332 100%);
         }
 
+        /* === 背景建築樣式 === */
         .ruins-bg {
             position: absolute;
             bottom: 0;
+            left: 0;
             width: 100%;
-            height: 40%;
-            background-color: var(--ruin-color);
-            clip-path: polygon(0% 100%, 0% 20%, 5% 20%, 5% 10%, 10% 10%, 10% 40%,
-                    15% 40%, 15% 5%, 25% 5%, 25% 30%, 30% 30%, 30% 60%,
-                    40% 60%, 40% 10%, 50% 10%, 50% 50%, 55% 50%, 55% 20%,
-                    65% 20%, 65% 55%, 75% 55%, 75% 15%, 85% 15%, 85% 40%,
-                    90% 40%, 90% 10%, 95% 10%, 95% 30%, 100% 30%, 100% 100%);
+            height: auto;
+            /* 自動高度以保持圖片比例 */
+            max-height: 100%;
+            /* 限制最大高度，避免遮擋到標題 */
+            object-fit: cover;
+            /* 確保圖片適當填滿 */
             z-index: 1;
+            /* 移除原本的 background-color 和 clip-path */
         }
 
         .smoke {
@@ -291,10 +311,30 @@
 
         .vehicle {
             position: absolute;
-            font-size: 80px;
             bottom: 0;
             left: 100%;
             filter: drop-shadow(4px 4px 0px rgba(0, 0, 0, 0.5));
+            height: auto;
+            object-fit: contain;
+        }
+
+        /* 定義各車輛圖片的大小與層級  */
+        #police {
+            width: 140px;
+            /* 警車圖片寬度 */
+            z-index: 12;
+        }
+
+        #ambulance {
+            width: 180px;
+            /* 救護車圖片寬度 */
+            z-index: 11;
+        }
+
+        #fire {
+            width: 240px;
+            /* 消防車圖片寬度 */
+            z-index: 10;
         }
 
         @keyframes driveBy {
@@ -367,26 +407,24 @@
         }
 
         .main-title {
-            font-family: 'DotGothic16', sans-serif;
-            font-size: 5rem;
-            color: #fff;
-            text-shadow: 4px 4px 0 #e94560, 8px 8px 0 #000;
-            margin-bottom: 0px;
-            letter-spacing: 5px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 2.5rem;
+            /* 調整大小以適應較長的標題 */
+            color: #ffd700;
+            text-shadow: 4px 4px 0 #000;
+            margin-bottom: 40px;
+            letter-spacing: 2px;
+            line-height: 1.4;
+            text-transform: uppercase;
+            padding: 0 20px;
+            /* 防止在小螢幕貼邊 */
         }
 
-        .sub-title {
-            font-family: 'Press Start 2P', cursive;
-            font-size: 1.2rem;
-            color: #ffd700;
-            text-shadow: 2px 2px 0 #000;
-            margin-top: 20px;
-            margin-bottom: 50px;
-        }
+
 
         .start-btn {
-            background-color: #e94560;
-            color: white;
+            background-color: #000000;
+            color: rgb(255, 213, 0);
             border: 4px solid #fff;
             padding: 15px 30px;
             font-family: 'DotGothic16', sans-serif;
@@ -530,8 +568,85 @@
             );
         };
 
-        // === 新增的 IntroScreen 組件 ===
+        // === IntroScreen 組件 ===
         const IntroScreen = ({ onStart }) => {
+            const [showStartBtn, setShowStartBtn] = useState(false);
+            // 追蹤是否已互動 (點擊) 的狀態 
+            const [hasInteracted, setHasInteracted] = useState(false);
+            // 開頭動畫音樂控制邏輯 
+            useEffect(() => {
+                // 建立 Audio 物件 (請確保 PIC 資料夾內有 intro.mp3，或自行修改為 bgm.mp3)
+                const introAudio = new Audio('PIC/intro.mp3');
+                introAudio.loop = true; // 設定循環播放
+                introAudio.volume = 0.5; // 設定音量
+
+                // 定義啟動音樂的函式
+                const playMusic = () => {
+                    introAudio.play().then(() => {
+                        removeInteractionListeners();
+                    }).catch(e => {
+                        console.log("等待使用者互動...", e);
+                        addInteractionListeners();
+                    });
+                };
+
+                // 當使用者互動後嘗試播放的函式
+                const handleInteraction = () => {
+                    playMusic();
+                    removeInteractionListeners();
+
+                    // 設定為已互動，隱藏提示文字
+                    setHasInteracted(true);
+
+                    // 點擊後延遲 6 秒才顯示開始按鈕 
+                    setTimeout(() => {
+                        setShowStartBtn(true);
+                    }, 6000);
+                };
+
+                const addInteractionListeners = () => {
+                    window.addEventListener('click', handleInteraction);
+                    window.addEventListener('keydown', handleInteraction);
+                    window.addEventListener('touchstart', handleInteraction);
+                };
+
+                const removeInteractionListeners = () => {
+                    window.removeEventListener('click', handleInteraction);
+                    window.removeEventListener('keydown', handleInteraction);
+                    window.removeEventListener('touchstart', handleInteraction);
+                };
+
+
+                // 嘗試自動播放
+                playMusic();
+
+
+                // 定義停止音樂函式
+                const stopMusic = () => {
+                    introAudio.pause();
+                    introAudio.currentTime = 0;
+                    removeInteractionListeners(); // 確保清除監聽;
+                };
+                const handleStopKey = (e) => {
+                    // 只有當音樂真的在播放時，此函式才執行停止
+                    if (!introAudio.paused) {
+                        stopMusic();
+                        window.removeEventListener('keydown', handleStopKey);
+                    }
+                };
+
+                // 延遲一點點再加入停止監聽，避免和「解除阻擋」的按鍵衝突
+                setTimeout(() => {
+                    window.addEventListener('keydown', handleStopKey);
+                }, 500);
+
+                // 組件卸載時清理
+                return () => {
+                    stopMusic();
+                    window.removeEventListener('keydown', handleStopKey);
+                    removeInteractionListeners();
+                };
+            }, []);
             useEffect(() => {
                 const police = document.getElementById('police');
                 const ambulance = document.getElementById('ambulance');
@@ -602,6 +717,7 @@
                                     titleContainer.style.transition = "opacity 2s ease-in";
                                     titleContainer.style.opacity = "1";
                                 }
+
                             }, 100);
                         }
                     }, 4000);
@@ -611,6 +727,9 @@
             }, []);
 
             const handleStart = () => {
+                // 只有當按鈕顯示時才允許觸發 (多一層防護)
+                if (!showStartBtn) return;
+
                 const transitionOverlay = document.getElementById('transition-overlay');
                 const introLayer = document.getElementById('intro-layer');
 
@@ -632,30 +751,55 @@
                     <div id="intro-layer">
                         <div id="smoke-container"></div>
                         <div className="ruins-bg"></div>
+                        {/* 更換為圖片標籤以預留插圖位置  */}
+                        {/*  PIC 資料夾內有對應的背景圖片 (如 city_ruins.png) */}
+                        <img
+                            className="ruins-bg"
+                            src="PIC/city_ruins.png"
+                            alt="Background Ruins"
+                            onError={(e) => {
+                                // 圖片讀取失敗時的 fallback (可選：隱藏或顯示替代色塊)
+                                e.target.style.display = 'none';
+                            }}
+                        />
+                        {/* 閃爍提示文字 (只有在尚未互動時顯示) */}
+                        {!hasInteracted && (
+                            <div className="click-hint">請點擊畫面任意處開始</div>
+                        )}
                         <div id="siren-overlay" className="siren-overlay"></div>
                         <div className="road">
-                            <div id="police" className="vehicle">🚓</div>
-                            <div id="ambulance" className="vehicle">🚑</div>
-                            <div id="fire" className="vehicle">🚒</div>
+                            {/* 請確保 PIC 資料夾內有對應的圖片檔案，或是修改 src 為您想要的路徑 */}
+                            <img id="police" className="vehicle" src="PIC/tittle_police.png" alt="Police Car" />
+                            <img id="ambulance" className="vehicle" src="PIC/tittle_ambulance.png" alt="Ambulance" />
+                            <img id="fire" className="vehicle" src="PIC/tittle_firetruck.png" alt="Fire Truck" />
                         </div>
                         <div id="title-container">
-                            <h1 className="main-title">大傷現場</h1>
-                            <h2 className="sub-title">MASS CASUALTY INCIDENT</h2>
-                            <button className="start-btn" onClick={handleStart}>點擊開始 START</button>
-                            {/* ★★★ 畫面右下角顯示版本與作者 (隨標題一起淡入) ★★★ */}
+                            <h1 className="main-title">Mass Casualty Triage Sim</h1>
+                            {/* 按鈕樣式，預設透明且不可點擊  */}
+                            <button
+                                className="start-btn"
+                                onClick={handleStart}
+                                style={{
+                                    opacity: showStartBtn ? 1 : 0,           // 控制透明度
+                                    pointerEvents: showStartBtn ? 'auto' : 'none', // 控制是否可點擊 (關鍵！)
+                                    transition: 'opacity 1s ease-in'         // 淡入效果
+                                }}
+                            >
+                                點擊開始 START
+                            </button>
                             <div style={{
                                 position: 'fixed',
                                 bottom: '20px',
                                 right: '20px',
                                 textAlign: 'right',
-                                color: 'rgba(255, 255, 255, 0.5)', // 半透明白色
+                                color: 'rgba(255, 255, 255, 0.5)',
                                 fontSize: '12px',
-                                fontFamily: "'Press Start 2P', cursive", // 使用像素字體
-                                textShadow: '2px 2px 0 #000', // 黑色陰影增加可讀性
-                                pointerEvents: 'none', // 確保不影響下方點擊
+                                fontFamily: "'Press Start 2P', cursive",
+                                textShadow: '2px 2px 0 #000',
+                                pointerEvents: 'none',
                                 lineHeight: '1.8'
                             }}>
-                                <div>Ver: 1.1.0</div>
+                                <div>Ver: 1.2.0</div>
                                 <div>Author:莊進宏</div>
                             </div>
                         </div>
@@ -695,7 +839,17 @@
             const bgmRef = useRef(null); // 用於儲存 Audio 物件
             const [isMuted, setIsMuted] = useState(true);
             const [score, setScore] = useState(0);
-            // ★★★ 虛擬搖桿與按鈕 Ref ★★★
+            // 全域禁止右鍵選單 (鎖定右鍵) 
+            useEffect(() => {
+                const handleGlobalContextMenu = (e) => {
+                    e.preventDefault();
+                };
+                window.addEventListener('contextmenu', handleGlobalContextMenu);
+                return () => {
+                    window.removeEventListener('contextmenu', handleGlobalContextMenu);
+                };
+            }, []);
+            //  虛擬搖桿與按鈕 Ref 
             const joystickRef = useRef({ active: false, identifier: null, baseX: 0, baseY: 0, vecX: 0, vecY: 0 });
             const [joystickUI, setJoystickUI] = useState({ x: 0, y: 0, active: false });
             // 用於將 useEffect 內部的 handler 暴露給外部 JSX 使用
