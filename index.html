@@ -12,8 +12,8 @@
     <link rel="apple-touch-icon" href="PIC/MCI_game.png">
     <!-- Google SEO 搜尋引擎優化設定  -->
     <meta name="description"
-        content="MCI (Mass Casualty Incident) 大量傷患事件模擬演練系統。透過互動式遊戲學習 START 檢傷分類法 (Simple Triage and Rapid Treatment)，檢傷分類 (Triage) 。start triage。MCI Triage。">
-    <meta name="keywords" content="MCI, triage, START, mass casualty incidents, 大量傷患, 檢傷分類, 災難模擬, 緊急醫療, EMT,start triage,MCI Triage">
+        content="MCI (Mass Casualty Incident) 大量傷患事件模擬演練系統。透過互動式遊戲學習 START 檢傷分類法 (Simple Triage and Rapid Treatment)，提升災難現場檢傷分類 (Triage) 與緊急處置能力。">
+    <meta name="keywords" content="MCI, triage, START, mass casualty incidents, 大量傷患, 檢傷分類, 災難模擬, 緊急醫療, EMT">
     <meta name="author" content="MCI Simulation">
     <!-- Google 搜尋與社群分享預覽圖片  -->
     <meta property="og:image" content="https://jin28931343-stack.github.io/MCI/PIC/MCI_game.png">
@@ -595,15 +595,30 @@
             }, []);
             // 開頭動畫音樂控制邏輯 
             useEffect(() => {
-                // 建立 Audio 物件 (請確保 PIC 資料夾內有 intro.mp3，或自行修改為 bgm.mp3)
+                // 建立 Audio 物件
                 const introAudio = new Audio('PIC/intro.mp3');
                 introAudio.loop = true; // 設定循環播放
                 introAudio.volume = 0.5; // 設定音量
 
+                // ★★★ 修正函式：啟動按鈕顯示倒數 ★★★
+                const startButtonSequence = () => {
+                    // 確保只執行一次
+                    removeInteractionListeners();
+
+                    // 設定為已互動，隱藏提示文字
+                    setHasInteracted(true);
+
+                    // 點擊或自動播放後，延遲 6 秒才顯示開始按鈕
+                    setTimeout(() => {
+                        setShowStartBtn(true);
+                    }, 6000);
+                };
+
                 // 定義啟動音樂的函式
                 const playMusic = () => {
                     introAudio.play().then(() => {
-                        removeInteractionListeners();
+                        // ★★★ 修正點：自動播放成功時，也要執行按鈕倒數邏輯 ★★★
+                        startButtonSequence();
                     }).catch(e => {
                         console.log("等待使用者互動...", e);
                         addInteractionListeners();
@@ -612,16 +627,9 @@
 
                 // 當使用者互動後嘗試播放的函式
                 const handleInteraction = () => {
+                    // 使用者互動後，再次呼叫 playMusic
+                    // 這時 play() 會成功，進而觸發 .then() 裡面的 startButtonSequence()
                     playMusic();
-                    removeInteractionListeners();
-
-                    // 設定為已互動，隱藏提示文字
-                    setHasInteracted(true);
-
-                    // 點擊後延遲 6 秒才顯示開始按鈕 
-                    setTimeout(() => {
-                        setShowStartBtn(true);
-                    }, 6000);
                 };
 
                 const addInteractionListeners = () => {
@@ -636,26 +644,24 @@
                     window.removeEventListener('touchstart', handleInteraction);
                 };
 
-
                 // 嘗試自動播放
                 playMusic();
 
-
-                // 定義停止音樂函式
+                // 定義停止音樂函式 (組件卸載用)
                 const stopMusic = () => {
                     introAudio.pause();
                     introAudio.currentTime = 0;
-                    removeInteractionListeners(); // 確保清除監聽;
+                    removeInteractionListeners();
                 };
+
+                // 按下任意鍵停止音樂 (除錯用，可保留或移除)
                 const handleStopKey = (e) => {
-                    // 只有當音樂真的在播放時，此函式才執行停止
                     if (!introAudio.paused) {
                         stopMusic();
                         window.removeEventListener('keydown', handleStopKey);
                     }
                 };
 
-                // 延遲一點點再加入停止監聽，避免和「解除阻擋」的按鍵衝突
                 setTimeout(() => {
                     window.addEventListener('keydown', handleStopKey);
                 }, 500);
@@ -5724,5 +5730,3 @@
 </body>
 
 </html>
-
-
