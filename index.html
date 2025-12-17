@@ -2182,8 +2182,9 @@
                                                 menu.target.hasBeenScored = true; // 標記此傷患已獲得分數
                                             }
                                         } else {
-                                            // (選填) 若需要顯示錯誤提示可加在這
-                                            // addFeedback(menu.x, menu.y - 50, "判斷錯誤", "#95a5a6");
+                                             // 檢傷錯誤扣 100 分 
+                                            setScore(prev => prev - 100);
+                                            addFeedback(menu.x, menu.y - 50, "檢傷錯誤 -100", "#e74c3c");
                                         }
                                         addFeedback(menu.x, menu.y, "檢傷完成", colors[i] === 'black' ? '#999' : colors[i]);
 
@@ -5730,3 +5731,4 @@
 </body>
 
 </html>
+
