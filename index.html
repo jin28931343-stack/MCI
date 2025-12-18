@@ -578,7 +578,7 @@
             'PIC/black_zone.png', 'PIC/red_zone.png', 'PIC/yellow_zone.png', 'PIC/green_zone.png',
             'PIC/command_post1.png', 'PIC/decon1.png', 'PIC/ambulance_staging1.png',
             'PIC/icon_green.png', 'PIC/icon_yellow.png', 'PIC/icon_red.png', 'PIC/icon_black.png',
-            'PIC/BASIC.png','PIC/Pulse.png','PIC/consciousness.png'
+            'PIC/BASIC.png', 'PIC/Pulse.png', 'PIC/consciousness.png'
         ];
         // === IntroScreen 組件 ===
         const IntroScreen = ({ onStart }) => {
@@ -2314,11 +2314,16 @@
                                 statsTracker.current.tourniquet.total++; // 總嘗試次數
                                 if (menu.target && menu.target.data) {
                                     if (menu.target.data.isBleeding && !menu.target.isDead) {
-                                        setScore(prev => prev + 100);
-                                        addFeedback(menu.x, menu.y - 40, "止血正確 +100", "#f1c40f");
-                                        menu.target.data.isBleeding = false;
-                                        menu.target.tourniquetTimer = null;
-                                        addFeedback(menu.x, menu.y, "止血成功", "#2ecc71");
+                                        //  10% 機率止血失敗 
+                                        if (Math.random() < 0.1) {
+                                            addFeedback(menu.x, menu.y, "仍再出血!", "#e74c3c");
+                                        } else {
+                                            setScore(prev => prev + 100);
+                                            addFeedback(menu.x, menu.y - 40, "止血正確 +100", "#f1c40f");
+                                            menu.target.data.isBleeding = false;
+                                            menu.target.tourniquetTimer = null;
+                                            addFeedback(menu.x, menu.y, "止血成功", "#2ecc71");
+                                        }
                                     } else {
                                         addFeedback(menu.x, menu.y, "無需/無法止血", "#bdc3c7");
                                     }
