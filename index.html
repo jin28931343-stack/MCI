@@ -998,6 +998,8 @@
             const [showTabletUI, setShowTabletUI] = useState(false);
             // ★★★ 新增：目前在平板介面中選中的傷患 ★★★
             const [selectedPatient, setSelectedPatient] = useState(null);
+            const [tabletFocus, setTabletFocus] = useState('survivor_list'); // 'survivor_list' (右側) 或 'ambulance_list' (左側)
+            const [tabletSelectedIndex, setTabletSelectedIndex] = useState(0);
             const [triageCounts, setTriageCounts] = useState({
                 green: 0,
                 yellow: 0,
@@ -1070,7 +1072,74 @@
                 { name: "救護車待命區", color: "#3498db", type: "ambulance_staging", imgSrc: "PIC/ambulance_staging.png" },//6 
                 { name: "大聲公", color: "#e67e22", type: "megaphone", imgSrc: "PIC/megaphone.png" }, // 7
             ];
+            // ★★★ 新增：共用的後送執行邏輯 (供滑鼠與鍵盤使用) ★★★
+            const executeEvacuation = (veh, patient) => {
+                if (!patient) return;
+                // 1. 檢查指揮車
+                if (veh.isStatic) {
+                    gameState.current.feedbacks.push({ x: gameState.current.player.x, y: gameState.current.player.y - 50, text: "指揮車無法後送", color: "#e74c3c", life: 60, vy: -0.5 });
+                    return;
+                }
+                // 2. 檢查安置狀態
+                if (!patient.hasArrived) {
+                    gameState.current.feedbacks.push({ x: gameState.current.player.x, y: gameState.current.player.y - 50, text: "傷患未安置，無法後送", color: "#e74c3c", life: 60, vy: -0.5 });
+                    return;
+                }
 
+                // 3. 檢查載送規則
+                const canLoad = (v, tag) => {
+                    const p = v.passengers;
+                    if (v.type === 'mini_bus') return tag === 'green' && p.length < 8;
+                    if (p.length === 0) return true;
+                    const hasRed = p.includes('red');
+                    const hasYellow = p.includes('yellow');
+                    const greens = p.filter(c => c === 'green').length;
+                    if (hasRed) return false;
+                    if (tag === 'red') return false;
+                    if (tag === 'yellow') return greens === 1 && !hasYellow;
+                    if (tag === 'green') return hasYellow || greens === 1;
+                    return false;
+                };
+
+                if (canLoad(veh, patient.triageTag)) {
+                    // 紅色加分
+                    if (patient.triageTag === 'red') {
+                        setScore(prev => prev + 500);
+                        gameState.current.feedbacks.push({ x: gameState.current.player.x, y: gameState.current.player.y - 50, text: "優先後送紅色 +500", color: "#f1c40f", life: 60, vy: -0.5 });
+                    }
+                    // 上車
+                    veh.passengers.push(patient.triageTag);
+                    patient.onAmbulance = true;
+                    setSelectedPatient(null);
+
+                    // 自動出發判斷
+                    const p = veh.passengers;
+                    let shouldDepart = false;
+                    if (veh.type === 'mini_bus') {
+                        if (p.length >= 8) shouldDepart = true;
+                    } else {
+                        const hasRed = p.includes('red');
+                        const hasYellow = p.includes('yellow');
+                        const greens = p.filter(c => c === 'green').length;
+                        if (hasRed || (hasYellow && greens >= 1) || greens >= 2) shouldDepart = true;
+                    }
+                    if (shouldDepart) veh.state = 'departing';
+
+                    // 更新計數
+                    const counts = { green: 0, yellow: 0, red: 0, black: 0 };
+                    gameState.current.survivors.forEach(s => { if (s.hasArrived && s.triageTag) counts[s.triageTag]++; });
+                    setTriageCounts(counts);
+                    forceUpdate(prev => prev + 1);
+
+                    // ★★★ 操作完成後，重置焦點回名單 ★★★
+                    setTabletFocus('survivor_list');
+                    setTabletSelectedIndex(0);
+
+                } else {
+                    if (veh.type === 'mini_bus') gameState.current.feedbacks.push({ x: gameState.current.player.x, y: gameState.current.player.y - 50, text: "限載綠色 (上限8人)", color: "#e74c3c", life: 60, vy: -0.5 });
+                    else gameState.current.feedbacks.push({ x: gameState.current.player.x, y: gameState.current.player.y - 50, text: "不符載送規則/已滿", color: "#e74c3c", life: 60, vy: -0.5 });
+                }
+            };
 
             const handleSlotClick = (index) => {
                 const item = items[index];
@@ -1164,10 +1233,10 @@
                         vy: -0.5
                     });
                     // ★★★ 新增：大聲公使用後，立即手動更新分類計數 (確保 UI 同步) ★★★
-                    // 修正：不再檢查 hasArrived，只要有標籤且在現場即算入
+                    // 改為累計模式 (Cumulative)，只要曾經抵達 (hasArrived) 且有檢傷分類，即計算在內，不扣除已後送者
                     const counts = { green: 0, yellow: 0, red: 0, black: 0 };
                     state.survivors.forEach(s => {
-                        if (s.triageTag && !s.onAmbulance) {
+                        if (s.triageTag && s.hasArrived) {
                             counts[s.triageTag]++;
                         }
                     });
@@ -1194,6 +1263,11 @@
                 } else if (item.type === 'tablet') {
                     // ★★★ 如果是平板，開啟 UI ★★★
                     setShowTabletUI(true);
+                    // 強制停止角色移動 
+                    gameState.current.keys = { w: false, s: false, a: false, d: false };
+                    gameState.current.player.moving = false;
+                    setTabletFocus('survivor_list');
+                    setTabletSelectedIndex(0);
                 } else if (['command_post', 'ambulance_staging', 'decon'].includes(item.type)) {
                     // ★★★ 限制特殊區域只能設置一個 ★★★
                     // 檢查場景中是否已存在相同類型的區域 (使用 color 作為識別)
@@ -1547,16 +1621,16 @@
                 const checkTriageCounts = () => {
                     const counts = { green: 0, yellow: 0, red: 0, black: 0 };
                     state.survivors.forEach(s => {
-                        // 計算已抵達對應區域的傷患
-                        // ★★★ 修正：排除已上救護車的傷患 (避免安置人數與後送人數重複計算) ★★★
-                        if (s.triageTag && !s.onAmbulance) {
+                        // 修改：累計安置人數。
+                        // 條件：有檢傷分類 (triageTag) 且 已抵達安置區 (hasArrived)。
+                        // 移除 !s.onAmbulance 判斷，使人數不會因為後送而減少。
+                        if (s.triageTag && s.hasArrived) {
                             counts[s.triageTag] = counts[s.triageTag] + 1;
-
                         }
-
                     });
                     setTriageCounts(counts);
                 };
+
 
                 const resize = () => {
                     if (!canvas) return;
@@ -1723,18 +1797,27 @@
                         let attempts = 0;
 
                         // 嘗試尋找合法位置 (最多嘗試 50 次以防無窮迴圈)
-                        while (!validPosition && attempts < 50) {
+                        while (!validPosition && attempts < 200) {
                             attempts++;
 
                             // 決定生成區域
-                            if (car && Math.random() > 0.4) {
+                            if (car && Math.random() > 0.8) {
                                 // 策略 A: 在車輛「附近」生成 (範圍稍大，允許靠近)
                                 sx = car.x + rand(-30, car.w + 30);
                                 sy = car.y + rand(-30, car.h + 30);
                             } else {
-                                // 策略 B: 全地圖隨機
-                                sx = rand(350 + LEFT_EXPANSION, WORLD_WIDTH - 150);
-                                sy = rand(150, WORLD_HEIGHT - 150);
+                                // 策略 B: 集中於地圖中間區域
+                                // 計算中心點 (考量 LEFT_EXPANSION 偏移量)
+                                // 可活動區域 X 約為 1050 ~ 2550
+                                const centerX = (350 + LEFT_EXPANSION + WORLD_WIDTH - 150) / 2; // 約 1800
+                                const centerY = WORLD_HEIGHT / 2; // 600
+
+                                // 設定集中範圍 (X軸 +/- 300, Y軸 +/- 200) -> 形成一個中間的矩形熱區
+                                const spreadX = 500;
+                                const spreadY = 300;
+
+                                sx = rand(centerX - spreadX, centerX + spreadX);
+                                sy = rand(centerY - spreadY, centerY + spreadY);
                             }
 
                             // 1. 基礎邊界檢查
@@ -1886,6 +1969,79 @@
                 const handleKeyDown = (e) => {
                     const state = gameState.current;
                     if (state.isGameOver) return;
+
+                    // ★★★ 平板模式：鍵盤導航與移動鎖定 ★★★
+                    if (showTabletUI) {
+                        const visibleSurvivors = state.survivors.filter(s => s.triageTag);
+                        const staging = state.triageMats.find(m => m.color === 'ambulance_staging');
+                        let visibleVehicles = [];
+                        if (staging) {
+                            visibleVehicles = state.emergencyVehicles.filter(v =>
+                                ['ambulance', 'mini_bus'].includes(v.type) && v.state !== 'departing' &&
+                                v.x >= staging.x && v.x <= staging.x + staging.w &&
+                                v.y >= staging.y && v.y <= staging.y + staging.h
+                            );
+                        } else {
+                            visibleVehicles = state.emergencyVehicles.filter(v => ['ambulance', 'mini_bus'].includes(v.type) && v.state !== 'departing');
+                        }
+
+                        // 1. 方向鍵選擇 (上下鍵)
+                        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                            const dir = e.key === 'ArrowUp' ? -1 : 1;
+                            if (tabletFocus === 'survivor_list') {
+                                if (visibleSurvivors.length > 0) {
+                                    setTabletSelectedIndex(prev => (prev + dir + visibleSurvivors.length) % visibleSurvivors.length);
+                                }
+                            } else {
+                                if (visibleVehicles.length > 0) {
+                                    setTabletSelectedIndex(prev => (prev + dir + visibleVehicles.length) % visibleVehicles.length);
+                                }
+                            }
+                            e.preventDefault(); // 防止網頁捲動
+                            return; // ★★★ 阻止角色移動 ★★★
+                        }
+
+                        // 2. E 鍵 / Enter 鍵確認
+                        if (e.key === 'e' || e.key === 'E' || e.key === 'Enter') {
+                            if (tabletFocus === 'survivor_list') {
+                                const s = visibleSurvivors[tabletSelectedIndex];
+                                if (s && !s.onAmbulance) {
+                                    setSelectedPatient(s);
+                                    setTabletFocus('ambulance_list'); // 跳轉左側
+                                    setTabletSelectedIndex(0);
+                                }
+                            } else if (tabletFocus === 'ambulance_list') {
+                                const veh = visibleVehicles[tabletSelectedIndex];
+                                if (veh && selectedPatient) {
+                                    executeEvacuation(veh, selectedPatient);
+                                }
+                            }
+                            return; // 阻止其他互動
+                        }
+
+                        // 3. C 鍵取消
+                        if (e.key === 'c' || e.key === 'C') {
+                            if (tabletFocus === 'ambulance_list') {
+                                setSelectedPatient(null);
+                                setTabletFocus('survivor_list'); // 回到右側名單
+                            } else {
+                                cancelAction(); // 關閉平板
+                            }
+                            return;
+                        }
+
+                        // 4. I 鍵 (關閉平板並切換道具欄)
+                        if (e.key === 'i' || e.key === 'I') {
+                            cancelAction();
+                            setShowInventory(prev => !prev);
+                            return;
+                        }
+
+                        // ★★★ 攔截所有移動按鍵 (WASD/方向鍵)，確保平板開啟時角色不動 ★★★
+                        if (['w', 'a', 's', 'd', 'ArrowLeft', 'ArrowRight'].includes(e.key) || ['W', 'A', 'S', 'D'].includes(e.key)) {
+                            return;
+                        }
+                    }
                     // 若玩家忙碌中 (如評估脈搏時)，禁止鍵盤操作 
                     if (state.player.isBusy) return;
 
@@ -2005,7 +2161,7 @@
                         }
                         // 2. 一般模式
                         else {
-                            const interactRadius = 80;
+                            const interactRadius = 100;
                             let minDist = Infinity;
                             let bestTarget = null;
 
@@ -2651,7 +2807,7 @@
 
 
 
-                    const interactRadius = 60;
+                    const interactRadius = 65;
                     let clickedSomething = false;
 
                     // 檢查火焰
@@ -2716,7 +2872,7 @@
                     // 檢查傷患
                     for (let s of state.survivors) {
                         const dist = Math.hypot(clickX - s.x, clickY - s.y);
-                        if (dist < 25) {
+                        if (dist < 45) {
                             clickedSomething = true;
                             let blockedByFire = state.hazards.some(h => Math.hypot(s.x - h.x, s.y - h.y) < h.r + 30);
                             if (blockedByFire) { addFeedback(s.x, s.y, "前方有火!", "#e74c3c"); return; }
@@ -3030,6 +3186,12 @@
                         }
                         if (menu.selectedIndex === 4) { ctx.lineWidth = 3; ctx.strokeStyle = '#f1c40f'; ctx.strokeRect(mx + 45, topY, 40, 40); }
                         ctx.fillStyle = '#2c3e50'; ctx.fillRect(mx, my, 40, 40); ctx.strokeStyle = '#fff'; ctx.strokeRect(mx, my, 40, 40);
+                        // ★★★ 修正：加入檢傷按鈕 (Index 0) 的黃色高亮判定 ★★★
+                        if (menu.selectedIndex === 0) {
+                            ctx.lineWidth = 3;
+                            ctx.strokeStyle = '#f1c40f';
+                            ctx.strokeRect(mx, my, 40, 40);
+                        }
                         // 修改: 繪製四張重疊的檢傷卡片 (綠黃紅黑)
                         // 依照圖片順序：綠 -> 黃 -> 紅 -> 黑 (由後往前堆疊)
                         const cards = ['green', 'yellow', 'red', 'black'];
@@ -3771,7 +3933,7 @@
                     if (state.placementMode.active || state.interactionMenu.active || state.isGameOver) return;
 
                     const p = state.player;
-                    const interactRadius = 60; // 與 handleCanvasClick 中的判定距離一致
+                    const interactRadius = 65; // 與 handleCanvasClick 中的判定距離一致
 
                     // 共用的繪製箭頭函式
                     const drawArrow = (x, y, label) => {
@@ -4280,7 +4442,7 @@
                             if (dist < 10) {
                                 s.isEvacuating = false;
 
-                                // ★★★ 修改：只有當綠色地墊存在時，才標記為「已安置」 ★★★
+                                // ★★★ 只有當綠色地墊存在時，才標記為「已安置」 ★★★
                                 const greenMat = state.triageMats.find(m => m.color === 'green');
                                 if (greenMat) {
                                     s.hasArrived = true; // 標記已抵達
@@ -4294,7 +4456,7 @@
                                         }
                                     }
                                 } else {
-                                    s.hasArrived = false;
+                                    s.hasArrived = true;
                                     addFeedback(s.x, s.y, "抵達集結點", "#bdc3c7");
                                 }
                                 checkTriageCounts(); // 自行移動抵達後檢查計數
@@ -4521,6 +4683,8 @@
                                 if (state.frameCount % 45 === 0) addFeedback(p.x, p.y - 30, "割傷! (金屬)", "#e74c3c");
                             }
                         }
+                        // ★★★ 修改：如果車輛已破壞 (isBreached)，取消碰撞判定，允許玩家穿過 ★★★
+                        if (o.isBreached) continue;
 
                         let obBox = o.type === 'guardrail' ? { x: o.x, y: o.y, w: o.w, h: o.h } : o.hitbox;
                         if (!obBox) obBox = { x: o.x, y: o.y, w: o.w, h: o.h };
@@ -5415,6 +5579,7 @@
                                             }
 
                                             return vehicles.map((veh, idx) => {
+                                                const isKeySelected = (tabletFocus === 'ambulance_list' && tabletSelectedIndex === idx);
                                                 // ★★★ 修改：載送規則檢查 (區分小巴與救護車) ★★★
                                                 const canLoad = (patientTag) => {
                                                     const p = veh.passengers;
@@ -5446,10 +5611,32 @@
                                                 const handleVehicleClick = () => {
                                                     // ★★★ 若為靜態車輛(第一台)，禁止互動 ★★★
                                                     if (veh.isStatic) {
-                                                        alert("此為現場指揮車，不執行後送任務！");
+                                                        gameState.current.feedbacks.push({
+                                                            x: gameState.current.player.x,
+                                                            y: gameState.current.player.y - 50,
+                                                            text: "指揮車無法後送",
+                                                            color: "#e74c3c",
+                                                            life: 60,
+                                                            vy: -0.5
+                                                        });
                                                         return;
                                                     }
                                                     if (!selectedPatient) return;
+
+                                                    // ★★★ 檢查，必須是「已安置 (hasArrived)」狀態才能後送 ★★★
+                                                    if (!selectedPatient.hasArrived) {
+                                                        // alert("傷患尚未安置到指定區域，無法進行後送！"); // 移除舊版警示
+                                                        // 改為遊戲內浮動文字提示
+                                                        gameState.current.feedbacks.push({
+                                                            x: gameState.current.player.x,
+                                                            y: gameState.current.player.y - 50,
+                                                            text: "傷患未安置，無法後送",
+                                                            color: "#e74c3c",
+                                                            life: 60,
+                                                            vy: -0.5
+                                                        });
+                                                        return;
+                                                    }
 
                                                     if (canLoad(selectedPatient.triageTag)) {
                                                         if (selectedPatient.triageTag === 'red') {
@@ -5487,10 +5674,11 @@
                                                         if (shouldDepart) {
                                                             veh.state = 'departing';
                                                         }
-                                                        // ★★★ 立即重新計算安置人數 (因為有人上車了，要從安置名單扣除) ★★★
+                                                        // ★★★ 累計模式，不再從安置名單扣除已上車人數 ★★★
                                                         const counts = { green: 0, yellow: 0, red: 0, black: 0 };
                                                         gameState.current.survivors.forEach(s => {
-                                                            if (s.hasArrived && s.triageTag && !s.onAmbulance) {
+                                                            // 條件：已抵達 (hasArrived) 且 有分類 (triageTag)
+                                                            if (s.hasArrived && s.triageTag) {
                                                                 counts[s.triageTag]++;
                                                             }
                                                         });
@@ -5501,7 +5689,14 @@
                                                         if (veh.type === 'mini_bus') {
                                                             alert("小巴只能載送綠色輕傷患者 (上限8人)！");
                                                         } else {
-                                                            alert("不符合載送規則或車位已滿！\n規則: 1紅 或 1黃1綠 或 2綠");
+                                                            gameState.current.feedbacks.push({
+                                                                x: gameState.current.player.x,
+                                                                y: gameState.current.player.y - 50,
+                                                                text: "不符載送規則/已滿",
+                                                                color: "#e74c3c",
+                                                                life: 60,
+                                                                vy: -0.5
+                                                            });
                                                         }
                                                     }
                                                 };
@@ -5592,7 +5787,7 @@
                                                 目前共 {survivorCount} 名
                                             </span>
                                         </div>
-                                        <span className="text-xs text-gray-400">點擊選擇傷患</span>
+                                        <span className="text-xs text-gray-400">上下鍵選擇 / E鍵確認</span>
                                     </div>
                                     <div className="space-y-2">
                                         {gameState.current.survivors.filter(s => s.triageTag).length === 0 ? (
@@ -5600,15 +5795,18 @@
                                         ) : (
                                             gameState.current.survivors.map((s, idx) => {
                                                 if (!s.triageTag) return null; // 只顯示已檢傷的
-                                                // 如果已上車或已死亡(轉黑卡)通常還是顯示，方便查看，但可根據需求過濾
+                                                // ★★★ 判斷是否為鍵盤選中項目 ★★★
+                                                const isKeySelected = (tabletFocus === 'survivor_list' && tabletSelectedIndex === idx);
+
                                                 return (
                                                     <div
                                                         key={idx}
                                                         onClick={() => !s.onAmbulance && setSelectedPatient(s)}
                                                         className={`p-2 rounded border cursor-pointer transition flex justify-between items-center
-                                                    ${selectedPatient === s ? 'bg-green-900/50 border-green-400 ring-1 ring-green-400' : 'bg-slate-800/50 border-slate-700 hover:bg-slate-700'}
-                                                    ${s.onAmbulance ? 'opacity-50 cursor-not-allowed' : ''}
-                                                `}
+            ${selectedPatient === s ? 'bg-green-900/50 border-green-400 ring-1 ring-green-400' : 'bg-slate-800/50 border-slate-700 hover:bg-slate-700'}
+            ${isKeySelected ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : ''} 
+            ${s.onAmbulance ? 'opacity-50 cursor-not-allowed' : ''}
+        `}
                                                     >
                                                         <div className="flex items-center gap-3">
                                                             <span className={`w-3 h-3 rounded-full ${s.triageTag === 'red' ? 'bg-red-500' :
