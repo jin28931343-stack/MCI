@@ -2310,48 +2310,118 @@
                             }
                         }
                         else if (menu.mode === 'treatment') {
+                            // 止血帶按鈕邏輯 (判斷是否需等待) 
                             if (clickX >= menuX - 20 && clickX <= menuX + 100 && clickY >= menuY - 50 && clickY <= menuY + 25) {
-                                statsTracker.current.tourniquet.total++; // 總嘗試次數
-                                if (menu.target && menu.target.data) {
-                                    if (menu.target.data.isBleeding && !menu.target.isDead) {
-                                        //  10% 機率止血失敗 
-                                        if (Math.random() < 0.1) {
-                                            addFeedback(menu.x, menu.y, "仍再出血!", "#e74c3c");
-                                        } else {
-                                            setScore(prev => prev + 100);
-                                            addFeedback(menu.x, menu.y - 40, "止血正確 +100", "#f1c40f");
-                                            menu.target.data.isBleeding = false;
-                                            menu.target.tourniquetTimer = null;
-                                            addFeedback(menu.x, menu.y, "止血成功", "#2ecc71");
-                                        }
-                                    } else {
-                                        addFeedback(menu.x, menu.y, "無需/無法止血", "#bdc3c7");
-                                    }
+                                const targetSurvivor = menu.target;
+                                const tx = menu.x;
+                                const ty = menu.y;
+
+                                // 1. 立即關閉選單並增加統計
+                                menu.active = false;
+                                menu.mode = 'main';
+                                statsTracker.current.tourniquet.total++;
+
+                                // 2. 判斷是否需要止血 (若無出血，直接提示不需等待)
+                                if (targetSurvivor && targetSurvivor.data && !targetSurvivor.data.isBleeding) {
+                                    addFeedback(tx, ty, "無需使用止血帶", "#bdc3c7");
+                                    return; // 結束，不進入等待
                                 }
-                                menu.active = false; menu.mode = 'main'; return;
+
+                                // 3. 若有出血 -> 鎖定玩家狀態並等待 2 秒
+                                state.player.isBusy = true;
+                                state.keys = { w: false, s: false, a: false, d: false };
+                                state.player.moving = false;
+
+                                addFeedback(tx, ty - 60, "止血處置中...", "#f1c40f");
+
+                                // 4. 設定 2 秒延遲執行結果
+                                setTimeout(() => {
+                                    state.player.isBusy = false; // 解除鎖定
+
+                                    if (targetSurvivor && targetSurvivor.data) {
+                                        if (targetSurvivor.data.isBleeding && !targetSurvivor.isDead) {
+                                            //  10% 機率止血失敗 
+                                            if (Math.random() < 0.1) {
+                                                addFeedback(tx, ty, "仍再出血!", "#e74c3c");
+                                            } else {
+                                                setScore(prev => prev + 100);
+                                                addFeedback(tx, ty - 40, "止血正確 +100", "#f1c40f");
+                                                targetSurvivor.data.isBleeding = false;
+                                                targetSurvivor.tourniquetTimer = null;
+                                                addFeedback(tx, ty, "止血成功", "#2ecc71");
+                                            }
+                                        } else {
+                                            // 預防性顯示 (雖前面已檢查，但防止異步狀態變更)
+                                            addFeedback(tx, ty, "無需使用止血帶", "#bdc3c7");
+                                        }
+                                    }
+                                }, 2000);
+
+                                return;
                             }
+                            // ★★★ 修改：呼吸道按鈕邏輯 (加入2秒等待與判斷) ★★★
                             if (clickX >= menuX - 20 && clickX <= menuX + 100 && clickY >= menuY + 20 && clickY <= menuY + 45) {
-                                statsTracker.current.airway.total++; // 總嘗試次數
-                                if (menu.target && menu.target.data) {
-                                    if (menu.target.isDead) {
-                                        addFeedback(menu.x, menu.y, "已死亡 (無效)", "#7f8c8d");
+                                const targetSurvivor = menu.target;
+                                const tx = menu.x;
+                                const ty = menu.y;
+
+                                // 1. 立即關閉選單並增加統計
+                                menu.active = false;
+                                menu.mode = 'main';
+                                statsTracker.current.airway.total++;
+
+                                // 2. 判斷是否需要暢通呼吸道 (若已死亡或已有呼吸，直接提示不需等待)
+                                if (targetSurvivor && targetSurvivor.data) {
+                                    if (targetSurvivor.isDead) {
+                                        addFeedback(tx, ty, "已死亡 (無效)", "#7f8c8d");
+                                        return;
                                     }
-                                    if (menu.target.data.resp === '無') {
-                                        setScore(prev => prev + 100);
-                                        if (Math.random() > 0.5) {
-                                            menu.target.data.resp = '恢復 (微弱)';
-                                            menu.target.data.severity = 'red';
-                                            menu.target.data.injuryText = '氣道阻塞解除';
-                                            menu.target.triageTag = null;
-                                            addFeedback(menu.x, menu.y, "恢復呼吸!", "#2ecc71");
-                                        } else {
-                                            addFeedback(menu.x, menu.y, "無效 (仍無呼吸)", "#bdc3c7");
-                                        }
-                                    } else {
-                                        addFeedback(menu.x, menu.y, "呼吸道暢通", "#3498db");
+                                    if (targetSurvivor.data.resp !== '無') {
+                                        addFeedback(tx, ty, "呼吸道暢通", "#3498db");
+                                        return;
                                     }
+                                } else {
+                                    return;
                                 }
-                                menu.active = false; menu.mode = 'main'; return;
+
+                                // 3. 若無呼吸 -> 鎖定玩家狀態並等待 2 秒
+                                state.player.isBusy = true;
+                                state.keys = { w: false, s: false, a: false, d: false };
+                                state.player.moving = false;
+
+                                addFeedback(tx, ty - 60, "暢通呼吸道中...", "#f1c40f");
+
+                                // 4. 設定 2 秒延遲執行結果
+                                setTimeout(() => {
+                                    state.player.isBusy = false; // 解除鎖定
+
+                                    if (targetSurvivor && targetSurvivor.data) {
+                                        // 再次檢查是否存活 (防止異步期間死亡)
+                                        if (targetSurvivor.isDead) {
+                                            addFeedback(tx, ty, "已死亡 (無效)", "#7f8c8d");
+                                            return;
+                                        }
+
+                                        if (targetSurvivor.data.resp === '無') {
+                                            setScore(prev => prev + 100);
+                                            // 50% 機率恢復呼吸
+                                            if (Math.random() > 0.5) {
+                                                targetSurvivor.data.resp = '恢復 (微弱)';
+                                                targetSurvivor.data.severity = 'red'; // 轉為紅卡
+                                                targetSurvivor.data.injuryText = '氣道阻塞解除';
+                                                targetSurvivor.triageTag = null; // 重置檢傷標籤(若有)
+                                                addFeedback(tx, ty, "恢復呼吸!", "#2ecc71");
+                                            } else {
+                                                addFeedback(tx, ty, "無效 (仍無呼吸)", "#bdc3c7");
+                                            }
+                                        } else {
+                                            // 預防性顯示
+                                            addFeedback(tx, ty, "呼吸道暢通", "#3498db");
+                                        }
+                                    }
+                                }, 2000);
+
+                                return;
                             }
                             // ★★★ 新增：取消按鈕點擊判定 (位置在呼吸道按鈕下方) ★★★
                             if (clickX >= menuX - 20 && clickX <= menuX + 100 && clickY >= menuY + 50 && clickY <= menuY + 75) {
@@ -5401,7 +5471,7 @@
 
                                                         const p = veh.passengers;
 
-                                                        // ★★★ 修改：自動出發邏輯 ★★★
+                                                        // 自動出發邏輯 
                                                         let shouldDepart = false;
                                                         if (veh.type === 'mini_bus') {
                                                             if (p.length >= 8) shouldDepart = true;
@@ -5417,7 +5487,7 @@
                                                         if (shouldDepart) {
                                                             veh.state = 'departing';
                                                         }
-                                                        // ★★★ 新增：立即重新計算安置人數 (因為有人上車了，要從安置名單扣除) ★★★
+                                                        // ★★★ 立即重新計算安置人數 (因為有人上車了，要從安置名單扣除) ★★★
                                                         const counts = { green: 0, yellow: 0, red: 0, black: 0 };
                                                         gameState.current.survivors.forEach(s => {
                                                             if (s.hasArrived && s.triageTag && !s.onAmbulance) {
@@ -5442,6 +5512,28 @@
                                                     if (veh.isStatic) return;
 
                                                     if (veh.passengers.length > 0) {
+                                                        // ★★★ 手動出發時檢查後送順序 (小巴除外) ★★★
+                                                        // 若載有綠色傷患，且現場仍有紅/黃傷患未後送，則扣分
+                                                        if (veh.type !== 'mini_bus' && veh.passengers.includes('green')) {
+                                                            const hasHigherPriority = gameState.current.survivors.some(s =>
+                                                                (s.triageTag === 'red' || s.triageTag === 'yellow') &&
+                                                                !s.onAmbulance &&
+                                                                !s.isDead
+                                                            );
+
+                                                            if (hasHigherPriority) {
+                                                                setScore(prev => prev - 500);
+                                                                gameState.current.feedbacks.push({
+                                                                    x: gameState.current.player.x,
+                                                                    y: gameState.current.player.y - 50,
+                                                                    text: "後送順序錯誤 -500",
+                                                                    color: "#e74c3c",
+                                                                    life: 60,
+                                                                    vy: -0.5
+                                                                });
+                                                            }
+                                                        }
+
                                                         veh.state = 'departing';
                                                         forceUpdate(prev => prev + 1);
                                                     }
