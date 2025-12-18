@@ -1346,6 +1346,15 @@
                 // ★★★ 說明：在此處補上 assets 物件定義，防止當機 ★★★
                 // ★★★ 修改：初始化 assets 物件時加入 player 容器 ★★★
                 const assets = { survivors: {}, player: {} };
+                const consciousnessImg = new Image();
+                consciousnessImg.src = 'PIC/Consciousness.png';
+                assets.consciousness = consciousnessImg;
+                const pulseImg = new Image();
+                pulseImg.src = 'PIC/Pusle.png';
+                assets.pulse = pulseImg;
+                const basicImg = new Image();
+                basicImg.src = 'PIC/BASIC.png';
+                assets.basic = basicImg;
                 // 2. 載入男女傷患插圖 (★ 請在此處放入您的圖片路徑 ★)
                 // 預留位置：請確保 PIC 資料夾內有 survivor_man.png 與 survivor_woman.png
                 const manImg = new Image();
@@ -1876,7 +1885,7 @@
                     if (menu.active) {
                         // 定義各模式的選項數量
                         const getOptionCount = (mode) => {
-                            if (mode === 'main') return 3; // [檢傷、醫療、取消]
+                            if (mode === 'main') return 5; // [檢傷、醫療、取消]
                             if (mode === 'triage') return 5; // [綠, 黃, 紅, 黑, 醫療]
                             if (mode === 'treatment') return 3; // [止血, 呼吸]
                             if (mode === 'radio') return 4; // [救護, 消防, 破壞, 搬運]
@@ -1905,9 +1914,19 @@
 
                             // 根據當前模式與 selectedIndex 計算模擬點擊座標
                             if (menu.mode === 'main') {
-                                if (menu.selectedIndex === 0) { targetX = mx + 20; targetY = my + 20; }
-                                else if (menu.selectedIndex === 1) { targetX = mx + 65; targetY = my + 20; }
-                                else { targetX = mx + 110; targetY = my + 20; } // 取消按鈕的模擬點擊座標 
+                                const btnSize = 40;
+                                const topY = menuY - 45;
+
+                                // 新增：上方按鈕 A 點擊判定
+                                if (clickX >= menuX && clickX <= menuX + btnSize && clickY >= topY && clickY <= topY + btnSize) {
+                                    addFeedback(menu.x, menu.y - 80, "功能開發中...", "#bdc3c7");
+                                    return;
+                                }
+                                // 新增：上方按鈕 B 點擊判定
+                                if (clickX >= menuX + 45 && clickX <= menuX + 45 + btnSize && clickY >= topY && clickY <= topY + btnSize) {
+                                    addFeedback(menu.x, menu.y - 80, "功能開發中...", "#bdc3c7");
+                                    return;
+                                }
                             }
                             else if (menu.mode === 'triage') {
                                 if (menu.selectedIndex === 4) { // 右側醫療按鈕
@@ -2130,6 +2149,19 @@
                         const menuX = menu.x - 40; const menuY = menu.y - 60;
 
                         if (menu.mode === 'main') {
+                            const btnSize = 40;
+                            const topY = menuY - 45;
+
+                            // 新增：上方按鈕 A 點擊判定
+                            if (clickX >= menuX && clickX <= menuX + btnSize && clickY >= topY && clickY <= topY + btnSize) {
+                                addFeedback(menu.x, menu.y - 80, "功能開發中...", "#bdc3c7");
+                                return;
+                            }
+                            // 新增：上方按鈕 B 點擊判定
+                            if (clickX >= menuX + 45 && clickX <= menuX + 45 + btnSize && clickY >= topY && clickY <= topY + btnSize) {
+                                addFeedback(menu.x, menu.y - 80, "功能開發中...", "#bdc3c7");
+                                return;
+                            }
                             if (clickX >= menuX && clickX <= menuX + 40 && clickY >= menuY && clickY <= menuY + 40) {
                                 menu.mode = 'triage'; return;
                             }
@@ -2182,7 +2214,7 @@
                                                 menu.target.hasBeenScored = true; // 標記此傷患已獲得分數
                                             }
                                         } else {
-                                             // 檢傷錯誤扣 100 分 
+                                            //  檢傷錯誤扣 100 分 
                                             setScore(prev => prev - 100);
                                             addFeedback(menu.x, menu.y - 50, "檢傷錯誤 -100", "#e74c3c");
                                         }
@@ -2819,6 +2851,37 @@
                     ctx.beginPath(); ctx.moveTo(menu.x, menu.y - 10); ctx.lineTo(menu.x, lineBottom); ctx.stroke();
 
                     if (menu.mode === 'main') {
+                        // === 新增：正上方兩個方形按鈕 (預留插圖位置) ===
+                        const topY = my - 45; // 位於原按鈕上方 5px 間隔處 (40px 高 + 5px)
+
+                        // 按鈕 A (位於檢傷按鈕正上方)
+                        ctx.fillStyle = '#2c3e50'; ctx.fillRect(mx, topY, 40, 40);
+                        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(mx, topY, 40, 40);
+                        if (assets.pulse && assets.pulse.complete && assets.pulse.naturalWidth !== 0) {
+                            // 繪製脈搏插圖，置中於 40x40 內 (設定為 32x32)
+                            ctx.drawImage(assets.pulse, mx + 4, topY + 4, 32, 32);
+                        } else {
+                            ctx.fillStyle = '#555';
+                            ctx.font = '10px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText("載入中...", mx + 20, topY + 24);
+                        }
+                        // 鍵盤選取高亮
+                        if (menu.selectedIndex === 3) { ctx.lineWidth = 3; ctx.strokeStyle = '#f1c40f'; ctx.strokeRect(mx, topY, 40, 40); }
+
+                        // 按鈕 B (位於急救按鈕正上方)
+                        ctx.fillStyle = '#2c3e50'; ctx.fillRect(mx + 45, topY, 40, 40);
+                        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(mx + 45, topY, 40, 40);
+                        if (assets.consciousness && assets.consciousness.complete && assets.consciousness.naturalWidth !== 0) {
+                            // 繪製意識狀態插圖，置中於 40x40 內 (設定為 32x32)
+                            ctx.drawImage(assets.consciousness, mx + 45 + 4, topY + 4, 32, 32);
+                        } else {
+                            ctx.fillStyle = '#555';
+                            ctx.font = '10px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText("載入中...", mx + 65, topY + 24);
+                        }
+                        if (menu.selectedIndex === 4) { ctx.lineWidth = 3; ctx.strokeStyle = '#f1c40f'; ctx.strokeRect(mx + 45, topY, 40, 40); }
                         ctx.fillStyle = '#2c3e50'; ctx.fillRect(mx, my, 40, 40); ctx.strokeStyle = '#fff'; ctx.strokeRect(mx, my, 40, 40);
                         // 修改: 繪製四張重疊的檢傷卡片 (綠黃紅黑)
                         // 依照圖片順序：綠 -> 黃 -> 紅 -> 黑 (由後往前堆疊)
@@ -2853,9 +2916,23 @@
                         });
                         // --- 右側按鈕 (醫療) ---
                         ctx.fillStyle = '#2c3e50'; ctx.fillRect(mx + 45, my, 40, 40); ctx.strokeStyle = '#fff'; ctx.strokeRect(mx + 45, my, 40, 40);
-                        ctx.fillStyle = '#2ecc71'; ctx.fillRect(mx + 62, my + 10, 6, 20); ctx.fillRect(mx + 55, my + 17, 20, 6);
-                        ctx.lineWidth = 3; ctx.strokeStyle = '#f1c40f'; // 黃色高亮
-                        if (menu.selectedIndex === 0) ctx.strokeRect(mx, my, 40, 40);
+                        // --- 插入 PIC/BASIC.png 圖片 ---
+                        if (assets.basic && assets.basic.complete && assets.basic.naturalWidth !== 0) {
+                            // 繪製圖片於 40x40 按鈕內，置中並縮放至 32x32 以保留邊框感
+                            ctx.drawImage(assets.basic, mx + 45 + 4, my + 4, 32, 32);
+                        } else {
+                            // 圖片載入中或失敗時顯示文字備案
+                            ctx.fillStyle = '#555';
+                            ctx.font = '10px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText("載入中...", mx + 65, my + 24);
+                        }
+                        // 若該按鈕被選中（鍵盤導航），顯示高亮邊框
+                        if (menu.selectedIndex === 1) {
+                            ctx.lineWidth = 3;
+                            ctx.strokeStyle = '#f1c40f'; // 黃色高亮
+                            ctx.strokeRect(mx + 45, my, 40, 40);
+                        }
                         if (menu.selectedIndex === 1) ctx.strokeRect(mx + 45, my, 40, 40);
                         // ★★★ 新增：繪製方形 X 取消按鈕 ★★★
                         const closeX = mx + 90;
@@ -3100,7 +3177,7 @@
                             ctx.fillText(`呼吸: ${d.resp}`, infoX + 8, yOffset); yOffset += lineHeight;
                             ctx.fillText(`脈搏: ${d.pulse}`, infoX + 8, yOffset); yOffset += lineHeight;
                             ctx.fillText(`意識: ${d.consciousness}`, infoX + 8, yOffset); yOffset += lineHeight;
-                            ctx.fillText(`大出血: ${d.isBleeding ? '是' : '否'}`, infoX + 8, yOffset);
+                            ctx.fillText(`四肢大出血: ${d.isBleeding ? '是' : '否'}`, infoX + 8, yOffset);
                             yOffset += lineHeight;
 
 
@@ -3618,11 +3695,16 @@
                     });
                 };
 
-                const update = () => {
 
+                state.frameCount++;
+                const update = () => {
                     const p = state.player;
                     state.frameCount++;
-                    // ★★★ 新增：能量飲料生成邏輯 (每30秒 = 1800 frames) ★★★
+                    // === 新增：全域 MP 被動恢復 (每 10 秒 / 600 幀 回復 1 點) ===
+                    if (state.frameCount % 600 === 0) {
+                        state.stats.mp = Math.min(state.stats.maxMp, state.stats.mp + 1);
+                    }
+                    //  能量飲料生成邏輯 (每30秒 = 1800 frames) 
                     state.energySpawnTimer++;
                     if (state.energySpawnTimer > 3600) {
                         state.energySpawnTimer = 0;
@@ -5731,4 +5813,3 @@
 </body>
 
 </html>
-
