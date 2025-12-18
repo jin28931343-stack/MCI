@@ -579,7 +579,8 @@
             'PIC/command_post1.png', 'PIC/decon1.png', 'PIC/ambulance_staging1.png',
             'PIC/icon_green.png', 'PIC/icon_yellow.png', 'PIC/icon_red.png', 'PIC/icon_black.png',
             'PIC/BASIC.png','PIC/Pulse.png','PIC/consciousness.png'
-            // === IntroScreen 組件 ===
+        ];
+        // === IntroScreen 組件 ===
         const IntroScreen = ({ onStart }) => {
             const [showStartBtn, setShowStartBtn] = useState(false);
             // 追蹤是否已互動 (點擊) 的狀態 
@@ -1351,7 +1352,7 @@
                 consciousnessImg.src = 'PIC/consciousness.png';
                 assets.consciousness = consciousnessImg;
                 const pulseImg = new Image();
-                pulseImg.src = 'PIC/Pusle.png';
+                pulseImg.src = 'PIC/Pulse.png';
                 assets.pulse = pulseImg;
                 const basicImg = new Image();
                 basicImg.src = 'PIC/BASIC.png';
@@ -5898,4 +5899,3 @@
 </body>
 
 </html>
-
