@@ -1782,7 +1782,13 @@
                     state.survivors.push({
                         x: sx, y: sy, found: false, triageTag: null, treatments: [], data: data,
                         // ★★★ 新增：onAmbulance 狀態，標記是否已上車 ★★★
-                        tourniquetTimer: data.isBleeding ? 180 : null, isDead: false, isEvacuating: false, isBeingCarried: false, onAmbulance: false, trappedInVehicle: inCar ? car : null
+                        tourniquetTimer: data.isBleeding ? 180 : null, isDead: false, isEvacuating: false, isBeingCarried: false, onAmbulance: false, trappedInVehicle: inCar ? car : null,
+                        // ★★★ 脈搏評估狀態 ★★★
+                        pulseRevealed: false, // 是否已顯示數值
+                        pulseMeasuring: false,   // 是否正在倒數中
+                        // ★★★ 意識評估狀態 ★★★
+                        consciousnessRevealed: false, // 是否已顯示意識
+                        consciousnessMeasuring: false // 是否正在評估意識中
                     });
                 }
                 // --- 新增：取消功能的共用邏輯 ---
@@ -1915,17 +1921,19 @@
                             // 根據當前模式與 selectedIndex 計算模擬點擊座標
                             if (menu.mode === 'main') {
                                 const btnSize = 40;
-                                const topY = menuY - 45;
+                                const topY = my - 45; // 使用 my 計算 topY
 
-                                // 新增：上方按鈕 A 點擊判定
-                                if (clickX >= menuX && clickX <= menuX + btnSize && clickY >= topY && clickY <= topY + btnSize) {
-                                    addFeedback(menu.x, menu.y - 80, "功能開發中...", "#bdc3c7");
-                                    return;
-                                }
-                                // 新增：上方按鈕 B 點擊判定
-                                if (clickX >= menuX + 45 && clickX <= menuX + 45 + btnSize && clickY >= topY && clickY <= topY + btnSize) {
-                                    addFeedback(menu.x, menu.y - 80, "功能開發中...", "#bdc3c7");
-                                    return;
+                                // 定義按鈕中心點供鍵盤模擬點擊使用
+                                if (menu.selectedIndex === 0) { // 檢傷按鈕
+                                    targetX = mx + 20; targetY = my + 20;
+                                } else if (menu.selectedIndex === 1) { // 醫療按鈕
+                                    targetX = mx + 65; targetY = my + 20;
+                                } else if (menu.selectedIndex === 2) { // 取消按鈕
+                                    targetX = mx + 110; targetY = my + 20;
+                                } else if (menu.selectedIndex === 3) { // 左上按鈕 A (脈搏)
+                                    targetX = mx + 20; targetY = topY + 20;
+                                } else if (menu.selectedIndex === 4) { // 右上按鈕 B (意識)
+                                    targetX = mx + 65; targetY = topY + 20;
                                 }
                             }
                             else if (menu.mode === 'triage') {
@@ -2152,25 +2160,71 @@
                             const btnSize = 40;
                             const topY = menuY - 45;
 
-                            // 新增：上方按鈕 A 點擊判定
+                            // 1. 上方按鈕 A (脈搏)
                             if (clickX >= menuX && clickX <= menuX + btnSize && clickY >= topY && clickY <= topY + btnSize) {
-                                addFeedback(menu.x, menu.y - 80, "功能開發中...", "#bdc3c7");
+                                const s = menu.target;
+                                if (!s.pulseRevealed && !s.pulseMeasuring) {
+                                    // 開始評估
+                                    s.pulseMeasuring = true;
+                                    addFeedback(menu.x, menu.y - 80, "評估脈搏中...", "#f1c40f");
+
+                                    // 設定 2 秒後顯示數值
+                                    setTimeout(() => {
+                                        // 檢查傷患是否存在 (避免遊戲重置後報錯)
+                                        if (state.survivors.includes(s)) {
+                                            s.pulseRevealed = true;
+                                            s.pulseMeasuring = false;
+                                            addFeedback(s.x, s.y - 80, "評估完成", "#2ecc71");
+                                        }
+                                    }, 2000);
+                                } else if (s.pulseMeasuring) {
+                                    addFeedback(menu.x, menu.y - 80, "正在評估...", "#bdc3c7");
+                                } else {
+                                    addFeedback(menu.x, menu.y - 80, "已完成評估", "#bdc3c7");
+                                }
                                 return;
                             }
-                            // 新增：上方按鈕 B 點擊判定
+
+                            // 2. 上方按鈕 B (意識)
                             if (clickX >= menuX + 45 && clickX <= menuX + 45 + btnSize && clickY >= topY && clickY <= topY + btnSize) {
-                                addFeedback(menu.x, menu.y - 80, "功能開發中...", "#bdc3c7");
+                                const s = menu.target;
+                                if (!s.consciousnessRevealed && !s.consciousnessMeasuring) {
+                                    // 開始評估
+                                    s.consciousnessMeasuring = true;
+                                    addFeedback(menu.x, menu.y - 80, "評估意識中...", "#f1c40f");
+
+                                    // 設定 2 秒後顯示數值
+                                    setTimeout(() => {
+                                        // 檢查傷患是否存在 (避免遊戲重置後報錯)
+                                        if (state.survivors.includes(s)) {
+                                            s.consciousnessRevealed = true;
+                                            s.consciousnessMeasuring = false;
+                                            addFeedback(s.x, s.y - 80, "評估完成", "#2ecc71");
+                                        }
+                                    }, 2000);
+                                } else if (s.consciousnessMeasuring) {
+                                    addFeedback(menu.x, menu.y - 80, "正在評估...", "#bdc3c7");
+                                } else {
+                                    addFeedback(menu.x, menu.y - 80, "已完成評估", "#bdc3c7");
+                                }
                                 return;
                             }
-                            if (clickX >= menuX && clickX <= menuX + 40 && clickY >= menuY && clickY <= menuY + 40) {
-                                menu.mode = 'triage'; return;
+
+                            // 3. 下方按鈕 1 (檢傷)
+                            if (clickX >= menuX && clickX <= menuX + btnSize && clickY >= menuY && clickY <= menuY + btnSize) {
+                                menu.mode = 'triage';
+                                return;
                             }
-                            if (clickX >= menuX + 45 && clickX <= menuX + 85 && clickY >= menuY && clickY <= menuY + 40) {
-                                menu.mode = 'treatment'; return;
+
+                            // 4. 下方按鈕 2 (醫療)
+                            if (clickX >= menuX + 45 && clickX <= menuX + 45 + btnSize && clickY >= menuY && clickY <= menuY + btnSize) {
+                                menu.mode = 'treatment';
+                                return;
                             }
-                            // 取消/關閉按鈕 (右, X圖示) 
-                            if (clickX >= menuX + 90 && clickX <= menuX + 130 && clickY >= menuY && clickY <= menuY + 40) {
-                                cancelAction(); // 呼叫與 C 鍵/右鍵相同的取消函式
+
+                            // 5. 下方按鈕 3 (取消)
+                            if (clickX >= menuX + 90 && clickX <= menuX + 90 + btnSize && clickY >= menuY && clickY <= menuY + btnSize) {
+                                cancelAction();
                                 return;
                             }
                         }
@@ -2494,11 +2548,12 @@
                                 }
                                 menu.active = false; menu.mode = 'main'; return;
                             }
+                            // 如果點擊了選單以外的地方...
+                            if (clickX < radioX || clickX > radioX + menuW || clickY < radioY || clickY > radioY + menuH) {
+                                menu.active = false; menu.mode = 'main'; return;
+                            }
                         }
-                        // 如果點擊了選單以外的地方...
-                        if (clickX < radioX || clickX > radioX + menuW || clickY < radioY || clickY > radioY + menuH) {
-                            menu.active = false; menu.mode = 'main'; return;
-                        }
+
 
                     }
 
@@ -3175,8 +3230,22 @@
                             ctx.fillText(`年齡: ${d.age} 歲`, infoX + 8, yOffset); yOffset += lineHeight;
                             ctx.fillText(`傷情: ${d.injuryText}`, infoX + 8, yOffset); yOffset += lineHeight;
                             ctx.fillText(`呼吸: ${d.resp}`, infoX + 8, yOffset); yOffset += lineHeight;
-                            ctx.fillText(`脈搏: ${d.pulse}`, infoX + 8, yOffset); yOffset += lineHeight;
-                            ctx.fillText(`意識: ${d.consciousness}`, infoX + 8, yOffset); yOffset += lineHeight;
+                            // 根據狀態顯示脈搏數值 
+                            let pulseText = "???";
+                            if (s.pulseRevealed) {
+                                pulseText = d.pulse;
+                            } else if (s.pulseMeasuring) {
+                                pulseText = "評估中...";
+                            }
+                            ctx.fillText(`脈搏: ${pulseText}`, infoX + 8, yOffset); yOffset += lineHeight;
+                            // 根據狀態顯示意識數值 
+                            let consciousnessText = "???";
+                            if (s.consciousnessRevealed) {
+                                consciousnessText = d.consciousness;
+                            } else if (s.consciousnessMeasuring) {
+                                consciousnessText = "評估中...";
+                            }
+                            ctx.fillText(`意識: ${consciousnessText}`, infoX + 8, yOffset); yOffset += lineHeight;
                             ctx.fillText(`四肢大出血: ${d.isBleeding ? '是' : '否'}`, infoX + 8, yOffset);
                             yOffset += lineHeight;
 
