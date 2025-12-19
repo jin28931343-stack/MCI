@@ -3,8 +3,8 @@ const CACHE_NAME = 'mci-sim-v1.3.0-offline-fix'; // 更新版本號以觸發更�
 // 補齊了 HTML 中所有引用的資源 (圖片與音效)
 const ASSETS_TO_CACHE = [
     './',
-    'index.html', // 建議確認您的主要 HTML 檔名是否固定，若不固定建議改為 index.html
-    'manifest.json',
+    './index.html', // 建議確認您的主要 HTML 檔名是否固定，若不固定建議改為 index.html
+    './manifest.json',
     
     // === 核心資源 ===
     'PIC/MCI_game.png',
@@ -147,3 +147,4 @@ self.addEventListener('activate', (event) => {
         })
     );
 });
+
