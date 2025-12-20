@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mci-sim-v1.3.0-offline-fix'; // 更新版本號以觸發更新
+const CACHE_NAME = 'mci-sim-v1.3.1-offline-fix'; // 更新版本號以觸發更新
 
 // 補齊了 HTML 中所有引用的資源 (圖片與音效)
 const ASSETS_TO_CACHE = [
@@ -147,4 +147,5 @@ self.addEventListener('activate', (event) => {
         })
     );
 });
+
 
