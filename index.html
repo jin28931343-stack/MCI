@@ -1487,6 +1487,10 @@
                 // ★★★ 說明：在此處補上 assets 物件定義，防止當機 ★★★
                 // ★★★ 修改：初始化 assets 物件時加入 player 容器 ★★★
                 const assets = { survivors: {}, player: {} };
+                // ★★★ 新增：預留呼吸評估插圖位置 ★★★
+                const respirationImg = new Image();
+                respirationImg.src = 'PIC/respiration.png'; // 請確保 PIC 資料夾內有此圖片，或忽略錯誤
+                assets.respiration = respirationImg;
                 const consciousnessImg = new Image();
                 consciousnessImg.src = 'PIC/consciousness.png';
                 assets.consciousness = consciousnessImg;
@@ -2159,7 +2163,7 @@
                     if (menu.active) {
                         // 定義各模式的選項數量
                         const getOptionCount = (mode) => {
-                            if (mode === 'main') return 5; // [檢傷、醫療、取消]
+                            if (mode === 'main') return 6; // [檢傷、醫療、取消]
                             if (mode === 'triage') return 5; // [綠, 黃, 紅, 黑, 醫療]
                             if (mode === 'treatment') return 3; // [止血, 呼吸]
                             if (mode === 'radio') return 4; // [救護, 消防, 破壞, 搬運]
@@ -2190,6 +2194,7 @@
                             if (menu.mode === 'main') {
                                 const btnSize = 40;
                                 const topY = my - 45; // 使用 my 計算 topY
+                                const respY = topY - 45; // ★★★ 新增：呼吸按鈕的 Y 座標 ★★★
 
                                 // 定義按鈕中心點供鍵盤模擬點擊使用
                                 if (menu.selectedIndex === 0) { // 檢傷按鈕
@@ -2202,6 +2207,9 @@
                                     targetX = mx + 20; targetY = topY + 20;
                                 } else if (menu.selectedIndex === 4) { // 右上按鈕 B (意識)
                                     targetX = mx + 65; targetY = topY + 20;
+                                } else if (menu.selectedIndex === 5) { // ★★★ 新增：最上方按鈕 (呼吸) ★★★
+                                    targetX = mx + 20; targetY = respY + 20;
+
                                 }
                             }
                             else if (menu.mode === 'triage') {
@@ -2428,7 +2436,33 @@
                         if (menu.mode === 'main') {
                             const btnSize = 40;
                             const topY = menuY - 45;
+                            const respY = topY - 45; // ★★★ 呼吸按鈕 Y 座標 (脈搏上方) ★★★
+                            // ★★★ 新增：最上方按鈕 (呼吸評估) 點擊判定 ★★★
+                            // 位置：脈搏按鈕 (menuX) 的正上方
+                            if (clickX >= menuX && clickX <= menuX + btnSize && clickY >= respY && clickY <= respY + btnSize) {
+                                const s = menu.target;
+                                if (!s.respRevealed && !s.respMeasuring) {
+                                    s.respMeasuring = true;
+                                    state.player.isBusy = true; // 鎖定玩家
+                                    state.keys = { w: false, s: false, a: false, d: false };
+                                    state.player.moving = false;
+                                    addFeedback(menu.x, menu.y - 100, "評估呼吸中...", "#f1c40f");
 
+                                    setTimeout(() => {
+                                        if (state.survivors.includes(s)) {
+                                            s.respRevealed = true;
+                                            s.respMeasuring = false;
+                                            addFeedback(s.x, s.y - 80, "呼吸評估完成", "#2ecc71");
+                                        }
+                                        state.player.isBusy = false;
+                                    }, 2000);
+                                } else if (s.respMeasuring) {
+                                    addFeedback(menu.x, menu.y - 100, "正在評估...", "#bdc3c7");
+                                } else {
+                                    addFeedback(menu.x, menu.y - 100, "已完成評估", "#bdc3c7");
+                                }
+                                return;
+                            }
                             // 1. 上方按鈕 A (脈搏)
                             if (clickX >= menuX && clickX <= menuX + btnSize && clickY >= topY && clickY <= topY + btnSize) {
                                 const s = menu.target;
@@ -2999,29 +3033,6 @@
                                 menu.x = s.x; menu.y = s.y; menu.target = s;
                                 menu.selectedIndex = 0;
 
-                                // ★★★ 加入這段代碼來觸發呼吸評估倒數 ★★★
-                                if (!s.respRevealed && !s.respMeasuring) {
-                                    s.respMeasuring = true;
-                                    // 1. 鎖定玩家狀態 (禁止移動與其他操作)
-                                    state.player.isBusy = true;
-
-                                    // 2. 強制停止當前移動
-                                    state.keys = { w: false, s: false, a: false, d: false };
-                                    state.player.moving = false;
-                                    addFeedback(s.x, s.y - 80, "評估呼吸中...", "#f1c40f");
-
-                                    setTimeout(() => {
-                                        // 3. 倒數結束後，解除鎖定
-                                        state.player.isBusy = false;
-                                        // 檢查傷患物件是否還存在於場景中
-                                        if (state.survivors.includes(s)) {
-                                            s.respRevealed = true;
-                                            s.respMeasuring = false;
-                                            addFeedback(s.x, s.y - 80, "呼吸評估完成", "#2ecc71");
-                                        }
-                                    }, 2000);
-                                }
-                                // ★★★ 修正結束 ★★★
                             } else {
                                 addFeedback(s.x, s.y, "太遠了!", "#e74c3c");
                             }
@@ -3292,9 +3303,24 @@
                     ctx.beginPath(); ctx.moveTo(menu.x, menu.y - 10); ctx.lineTo(menu.x, lineBottom); ctx.stroke();
 
                     if (menu.mode === 'main') {
-                        // === 新增：正上方兩個方形按鈕 (預留插圖位置) ===
+                        // === 正上方兩個方形按鈕 (預留插圖位置) ===
                         const topY = my - 45; // 位於原按鈕上方 5px 間隔處 (40px 高 + 5px)
+                        const respY = topY - 45; // ★★★ 新增：呼吸按鈕 Y 座標 ★★★
+                        // ★★★ 新增：呼吸評估按鈕繪製 ★★★
+                        ctx.fillStyle = '#2c3e50'; ctx.fillRect(mx, respY, 40, 40);
+                        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(mx, respY, 40, 40);
 
+                        // 預留插圖位置：呼吸 (Respiration)
+                        if (assets.respiration && assets.respiration.complete && assets.respiration.naturalWidth !== 0) {
+                            ctx.drawImage(assets.respiration, mx + 4, respY + 4, 32, 32);
+                        } else {
+                            // 若無圖片，顯示文字與佔位符
+                            ctx.fillStyle = '#555';
+                            ctx.font = '10px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText("呼吸", mx + 20, respY + 20);
+                            ctx.fillText("評估", mx + 20, respY + 32);
+                        }
                         // 按鈕 A (位於檢傷按鈕正上方)
                         ctx.fillStyle = '#2c3e50'; ctx.fillRect(mx, topY, 40, 40);
                         ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(mx, topY, 40, 40);
@@ -4563,13 +4589,25 @@
                     // --- 傷患自行移動邏輯 (取代原本的 splice 移除) ---
                     for (let i = state.survivors.length - 1; i >= 0; i--) {
                         let s = state.survivors[i];
+                        // ★★★ 定義安全區邊界 (消防車位置) ★★★
+                        // 消防車位於 50 + LEFT_EXPANSION (約 750)，以此作為判定線
+                        // 小於此 X 座標即視為進入消防車左側的安全/集結區域
+                        const fireTruckX = 50 + LEFT_EXPANSION;
                         // ★★★ 新增：跟隨者移動邏輯 (修復跟隨但不移動的問題) ★★★
                         if (s.isFollower && !s.onAmbulance && !s.hasArrived) {
                             const distToP = Math.hypot(p.x - s.x, p.y - s.y);
-
-                            // 檢查是否已進入綠色區域 (若玩家將其帶入安置區，則視為抵達)
                             const greenMat = state.triageMats.find(m => m.color === 'green');
-                            if (greenMat && s.x > greenMat.x && s.x < greenMat.x + greenMat.w && s.y > greenMat.y && s.y < greenMat.y + greenMat.h) {
+
+                            // 1. ★★★ 新增：檢查是否進入消防車左側區域 (安全區) ★★★
+                            // 若傷患被帶到消防車左邊，自動停止跟隨並前往對應區域(綠區或集結點)
+                            if (s.x < fireTruckX) {
+                                s.isFollower = false; // 停止跟隨
+                                s.isEvacuating = true; // 改為自動移動 (透過下方 isEvacuating 邏輯前往目的地)
+                                addFeedback(s.x, s.y, "進入安全區，自動報到", "#2ecc71");
+                            }
+                            // 檢查是否已進入綠色區域 (若玩家將其帶入安置區，則視為抵達)
+
+                            else if (greenMat && s.x > greenMat.x && s.x < greenMat.x + greenMat.w && s.y > greenMat.y && s.y < greenMat.y + greenMat.h) {
                                 s.isFollower = false;
                                 s.hasArrived = true;
                                 addFeedback(s.x, s.y, "跟隨者抵達安置區", "#2ecc71");
