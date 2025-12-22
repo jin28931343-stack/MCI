@@ -29,6 +29,7 @@ const ASSETS_TO_CACHE = [
     'PIC/consciousness.png',
     'PIC/flowchart1.png',
     'PIC/flowchart2.png',
+    'PIC/respiration.png',
 
     // === 角色與傷患 ===
     'PIC/survivor_man.png', 
@@ -147,6 +148,7 @@ self.addEventListener('activate', (event) => {
         })
     );
 });
+
 
 
 
