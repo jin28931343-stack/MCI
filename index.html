@@ -839,8 +839,13 @@
         function App() {
             const canvasRef = useRef(null);
             const [gameStarted, setGameStarted] = useState(false);
-            // ★★★ 控制人物選擇畫面的狀態 ★★★
+            //  控制人物選擇畫面的狀態 
             const [showCharacterSelect, setShowCharacterSelect] = useState(false);
+            // 控制操作說明顯示狀態 
+
+            const [showInstructions, setShowInstructions] = useState(false);
+            //  控制呼吸數值顯示的狀態
+            const [isRespRevealed, setIsRespRevealed] = useState(false);
             const [missionComplete, setMissionComplete] = useState(false);
             const [resultStats, setResultStats] = useState(null);
             const [survivorCount, setSurvivorCount] = useState(0);
@@ -854,14 +859,17 @@
             // 檢傷流程圖狀態控制 
             const [showFlowchart, setShowFlowchart] = useState(false);
             const [flowchartIndex, setFlowchartIndex] = useState(0);
+
             // 必須加入此 useEffect，讓 Ref 跟隨 State 更新
             useEffect(() => {
                 selectedSlotRef.current = selectedSlot;
             }, [selectedSlot]);
             const [gameOver, setGameOver] = useState(false);
             const [showMatSelector, setShowMatSelector] = useState(false);
+            const [matSelectorIndex, setMatSelectorIndex] = useState(0);
             // 控制道具欄顯示的狀態 (預設隱藏，按 I 切換) 
             const [showInventory, setShowInventory] = useState(false);
+
             // 音訊控制修改： MP3 播放 
             const bgmRef = useRef(null); // 用於儲存 Audio 物件
             const [isMuted, setIsMuted] = useState(true);
@@ -882,7 +890,12 @@
             // 用於將 useEffect 內部的 handler 暴露給外部 JSX 使用
             const keyDownHandlerRef = useRef(null);
             const cancelActionRef = useRef(null);
-
+            // ★★★ 新增：解決 useEffect 閉包問題的 Refs ★★★
+            const showMatSelectorRef = useRef(showMatSelector);
+            const matSelectorIndexRef = useRef(matSelectorIndex);
+            // 當 State 改變時，同步更新 Ref
+            useEffect(() => { showMatSelectorRef.current = showMatSelector; }, [showMatSelector]);
+            useEffect(() => { matSelectorIndexRef.current = matSelectorIndex; }, [matSelectorIndex]);
             // ★★★ 初始化 BGM (MP3) ★★★
             useEffect(() => {
                 // 建立 Audio 物件，路徑設定為 PIC/.mp3
@@ -1260,6 +1273,9 @@
                 gameState.current.interactionMenu.active = false; // 切換道具時關閉互動選單
                 if (item.type === "mat") {
                     setShowMatSelector(true);
+                    // 關鍵修正：點擊地墊後強制停止角色移動 
+                    gameState.current.keys = { w: false, s: false, a: false, d: false };
+                    gameState.current.player.moving = false;
                 } else if (item.type === 'tablet') {
                     // ★★★ 如果是平板，開啟 UI ★★★
                     setShowTabletUI(true);
@@ -1373,21 +1389,70 @@
                         isBleeding = false;
                     } else { // 70% 機率重傷(紅)
                         severity = 'red';
-                        consciousness = Math.random() > 0.5 ? '無意識' : '對痛有反應';
-                        resp = redRespOptions[Math.floor(Math.random() * redRespOptions.length)];
-                        pulse = Math.random() > 0.5 ? '橈動脈摸不到' : 'CRT>2秒';
-                        injuryText = Math.random() > 0.5 ? '受困壓傷、懷疑內出血' : '雙腳變形';
-                        isBleeding = true;
+                        // ★★★ 修改：受困紅色傷患中，80% 為無意識，呼吸/脈搏隨機 ★★★
+                        if (Math.random() < 0.8) {
+                            consciousness = '無意識';
+
+                            // 呼吸隨機 (包含正常與異常數值)
+                            const mixRespOptions = ['12次/min', '18次/min', '24次/min', '32次/min', '8次/min'];
+                            resp = mixRespOptions[Math.floor(Math.random() * mixRespOptions.length)];
+
+                            // 脈搏隨機 (包含正常與異常數值)
+                            const mixPulseOptions = ['橈動脈摸的到', 'CRT<2sec', '橈動脈摸不到', 'CRT>2秒'];
+                            pulse = mixPulseOptions[Math.floor(Math.random() * mixPulseOptions.length)];
+
+                            injuryText = '受困車內、頭部撞擊';
+                            isBleeding = Math.random() > 0.5; // 出血隨機
+                        } else {
+                            consciousness = Math.random() > 0.5 ? '無意識' : '對痛有反應';
+                            resp = redRespOptions[Math.floor(Math.random() * redRespOptions.length)];
+                            pulse = Math.random() > 0.5 ? '橈動脈摸不到' : 'CRT>2秒';
+                            injuryText = Math.random() > 0.5 ? '受困壓傷' : '雙腳變形';
+                            isBleeding = true;
+                        }
                     }
                 } else {
                     if (severityRoll > 0.9) {
                         severity = 'black'; consciousness = '無意識'; resp = '無'; pulse = '無'; injuryText = '無呼吸';
                         isBleeding = false;
                     } else if (severityRoll > 0.75) {
-                        severity = 'red'; consciousness = Math.random() > 0.5 ? '無意識' : '對痛有反應';
-                        resp = redRespOptions[Math.floor(Math.random() * redRespOptions.length)];
-                        pulse = Math.random() > 0.5 ? '橈動脈微弱,CRT>2秒' : '橈動脈摸不到'; injuryText = Math.random() > 0.5 ? '手臂變形、表情痛苦' : '臉色蒼白、多處撕裂傷';
-                        isBleeding = Math.random() > 0.3;
+                        // 指定的紅色傷患資料 (>0.1=90%機率出現此特殊設定) 
+                        // 性別隨機(由上方sex決定), 無法行走, 呼吸18, 脈搏摸的到, 意識昏迷
+                        // ★★★ 修改：非受困紅色傷患，90% 機率為「無意識、呼吸脈搏隨機」 ★★★
+                        if (Math.random() > 0.1) {
+                            severity = 'red';
+                            // 意識固定無意識
+                            consciousness = '無意識';
+
+                            // 呼吸隨機 (包含正常與異常數值)
+                            const mixRespOptions = ['12次/min', '18次/min', '24次/min', '32次/min', '8次/min'];
+                            resp = mixRespOptions[Math.floor(Math.random() * mixRespOptions.length)];
+
+                            // 脈搏隨機 (包含正常與異常數值)
+                            const mixPulseOptions = ['橈動脈摸的到', 'CRT<2sec', '橈動脈摸不到', 'CRT>2秒'];
+                            pulse = mixPulseOptions[Math.floor(Math.random() * mixPulseOptions.length)];
+
+                            injuryText = '臉色蒼白、多處撕裂傷';
+                            isBleeding = Math.random() > 0.5; // 出血隨機
+                        } else {
+                            // ★★★ 新增/替換：類型 B (取代原本的舊代碼) ★★★
+                            // 設定：[性別:隨機][呼吸:隨機][脈搏:橈動脈摸不到 或 CRT>2秒][意識:隨機]
+                            severity = 'red';
+
+                            // 意識隨機
+                            const consList = ['清醒', '對聲音有反應', '對痛有反應', '無意識', '昏迷無反應'];
+                            consciousness = consList[Math.floor(Math.random() * consList.length)];
+
+                            // 呼吸隨機
+                            const respList = ['12次/min', '18次/min', '20次/min', '24次/min', '32次/min', '8次/min'];
+                            resp = respList[Math.floor(Math.random() * respList.length)];
+
+                            // 脈搏: 固定為異常 (符合紅卡標準)
+                            pulse = Math.random() > 0.5 ? '橈動脈摸不到' : 'CRT>2秒';
+
+                            injuryText = Math.random() > 0.5 ? '臉色蒼白、冒冷汗' : '肢體末端冰冷';
+                            isBleeding = Math.random() > 0.3;
+                        }
                     } else if (severityRoll > 0.50) {
                         severity = 'yellow'; consciousness = Math.random() > 0.5 ? '對聲音有反應' : '可以聽指令'; resp = Math.random() > 0.5 ? '18次/分' : '24次/分'; pulse = Math.random() > 0.5 ? 'CRT<2sec' : '橈動脈摸的到'; injuryText = Math.random() > 0.5 ? '骨折、無法行走' : '頭暈、嘔吐無法行走';
                         isBleeding = false;
@@ -1866,8 +1931,11 @@
                     const data = generateSurvivorData(inCar);
                     state.survivors.push({
                         x: sx, y: sy, found: false, triageTag: null, treatments: [], data: data,
-                        // ★★★ 新增：onAmbulance 狀態，標記是否已上車 ★★★
+                        // ★★★ onAmbulance 狀態，標記是否已上車 ★★★
                         tourniquetTimer: data.isBleeding ? 180 : null, isDead: false, isEvacuating: false, isBeingCarried: false, onAmbulance: false, trappedInVehicle: inCar ? car : null,
+                        // ★★★ 加入呼吸評估狀態 ★★★
+                        respRevealed: false,     // 是否已顯示呼吸數值
+                        respMeasuring: false,    // 是否正在評估呼吸中
                         // ★★★ 脈搏評估狀態 ★★★
                         pulseRevealed: false, // 是否已顯示數值
                         pulseMeasuring: false,   // 是否正在倒數中
@@ -1969,6 +2037,44 @@
                 const handleKeyDown = (e) => {
                     const state = gameState.current;
                     if (state.isGameOver) return;
+                    // ★★★ 新增：地墊選擇模式的鍵盤導航 (攔截移動) ★★★
+                    if (showMatSelectorRef.current) {
+                        const colors = ['green', 'yellow', 'red', 'black'];
+                        const currentIndex = matSelectorIndexRef.current; // 使用 Ref 讀取當前索引
+                        // 1. 左右切換選項
+                        if (['ArrowLeft', 'a', 'A'].includes(e.key)) {
+                            setMatSelectorIndex(prev => (prev - 1 + 4) % 4);
+                            return;
+                        }
+                        if (['ArrowRight', 'd', 'D'].includes(e.key)) {
+                            setMatSelectorIndex(prev => (prev + 1) % 4);
+                            return;
+                        }
+
+                        // 2. 確認選擇 (Enter 或 E)
+                        if (['Enter', 'e', 'E'].includes(e.key)) {
+                            const selectedColor = colors[currentIndex];
+                            if (selectedColor) {
+                                const isUsed = state.triageMats.some(m => m.color === selectedColor);
+                                if (!isUsed) {
+                                    handleSelectMatColor(selectedColor);
+                                } else {
+                                    state.feedbacks.push({ x: state.player.x, y: state.player.y - 50, text: "區域已存在", color: "#e74c3c", life: 60, vy: -0.5 });
+                                }
+                            }
+                            return;
+                        }
+
+                        // 3. 取消
+                        if (['c', 'C', 'Escape'].includes(e.key)) {
+                            cancelAction();
+                            return;
+                        }
+
+                        // ★★★ 阻擋所有其他按鍵 (包含 WASD 移動)，確保選擇期間角色無法移動 ★★★
+                        return;
+                    }
+
 
                     // ★★★ 平板模式：鍵盤導航與移動鎖定 ★★★
                     if (showTabletUI) {
@@ -1986,8 +2092,10 @@
                         }
 
                         // 1. 方向鍵選擇 (上下鍵)
-                        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                            const dir = e.key === 'ArrowUp' ? -1 : 1;
+                        if (['ArrowUp', 'ArrowDown', 'w', 's', 'W', 'S'].includes(e.key)) {
+                            // 判斷是否為向上 (上箭頭 或 w)
+                            const dir = (['ArrowUp', 'w', 'W'].includes(e.key)) ? -1 : 1;
+
                             if (tabletFocus === 'survivor_list') {
                                 if (visibleSurvivors.length > 0) {
                                     setTabletSelectedIndex(prev => (prev + dir + visibleSurvivors.length) % visibleSurvivors.length);
@@ -2431,6 +2539,11 @@
                                         menu.target.found = true;
                                         menu.target.hasArrived = false; // 重置抵達狀態，讓傷患能再次被搬運或移動
                                         menu.target.isEvacuating = false; // 重置移動狀態 (避免從綠卡轉紅卡時仍繼續自行移動) 
+                                        // ★★★ 只要進行檢傷，就強制解除跟隨狀態 ★★★
+                                        if (menu.target.isFollower) {
+                                            menu.target.isFollower = false;
+                                            // addFeedback(menu.x, menu.y - 30, "解除跟隨", "#bdc3c7");
+                                        }
                                         state.survivorsFoundCount = state.survivors.filter(s => s.found).length;
                                         setSurvivorCount(state.survivorsFoundCount);
                                         // 比對傷患實際傷情 (data.severity) 與選擇的顏色 (colors[i])
@@ -2453,6 +2566,7 @@
                                             if (menu.target.data.severity === 'green') {
                                                 menu.target.isEvacuating = true;
                                                 addFeedback(menu.x, menu.y - 20, "傷患自行移動中...", "#2ecc71");
+
                                             } else {
                                                 // 玩家判斷為輕傷，但實際傷勢較重 -> 無法移動
                                                 addFeedback(menu.x, menu.y - 20, "傷勢過重無法移動", "#e74c3c");
@@ -2679,8 +2793,8 @@
                                                 y: ay, // 修正：使用 ay 作為垂直位置
                                                 targetX: ax, // 修正：使用 ax 作為目標 X
                                                 targetY: ay, // 修正：使用 ay 作為目標 Y
-                                                w: 1200,
-                                                h: 1200,
+                                                w: 80,
+                                                h: 40,
                                                 angle: 0 // 進場時角度歸零
                                             });
 
@@ -2884,6 +2998,30 @@
                                 menu.active = true; menu.mode = 'main';
                                 menu.x = s.x; menu.y = s.y; menu.target = s;
                                 menu.selectedIndex = 0;
+
+                                // ★★★ 加入這段代碼來觸發呼吸評估倒數 ★★★
+                                if (!s.respRevealed && !s.respMeasuring) {
+                                    s.respMeasuring = true;
+                                    // 1. 鎖定玩家狀態 (禁止移動與其他操作)
+                                    state.player.isBusy = true;
+
+                                    // 2. 強制停止當前移動
+                                    state.keys = { w: false, s: false, a: false, d: false };
+                                    state.player.moving = false;
+                                    addFeedback(s.x, s.y - 80, "評估呼吸中...", "#f1c40f");
+
+                                    setTimeout(() => {
+                                        // 3. 倒數結束後，解除鎖定
+                                        state.player.isBusy = false;
+                                        // 檢查傷患物件是否還存在於場景中
+                                        if (state.survivors.includes(s)) {
+                                            s.respRevealed = true;
+                                            s.respMeasuring = false;
+                                            addFeedback(s.x, s.y - 80, "呼吸評估完成", "#2ecc71");
+                                        }
+                                    }, 2000);
+                                }
+                                // ★★★ 修正結束 ★★★
                             } else {
                                 addFeedback(s.x, s.y, "太遠了!", "#e74c3c");
                             }
@@ -3413,78 +3551,78 @@
 
                 const drawSurvivorInfo = (player) => {
                     const interactRadius = 60;
-                    // --- 修改開始：定義左側區域邊界 ---
-                    // 消防車位置約在 750 (50 + 700)，設定 950 為界線，涵蓋左側與消防車周邊
+                    // 消防車位置約在 750 (50 + 700)，設定 950 為界線
                     const safeZoneBoundary = 950;
+
                     state.survivors.forEach(s => {
                         // 判斷該傷患是否為當前選單的目標
                         const isMenuTarget = state.interactionMenu.active && state.interactionMenu.target === s;
                         const distToPlayer = Math.hypot(player.x - s.x, player.y - s.y);
-                        // --- 修改顯示邏輯 ---
-                        // 1. 檢查是否在左側安全區域 (inSafeZone)
+
+                        // 1. 檢查是否在左側安全區域
                         const inSafeZone = s.x < safeZoneBoundary;
 
-                        // 2. 顯示條件：
-                        //    (A) 是當前點擊的目標 (isMenuTarget) -> 絕對顯示
-                        //    (B) 距離夠近 + 有檢傷卡 + "不在"安全區域 -> 自動顯示
+                        // 2. 顯示條件
                         const showInfo = isMenuTarget || (distToPlayer < interactRadius && s.triageTag && !inSafeZone);
+
                         if (showInfo && !s.isBeingCarried && !s.isEvacuating) {
+                            // ★★★ 修正關鍵：這行必須在最上面！ ★★★
+                            // 先取出資料 d，後面的程式碼才能使用 d.resp 或 d.sex
+                            const d = s.data;
+
                             // 定義資訊欄尺寸
                             const w = 140;
                             const h = 130;
 
-                            // 基礎間距
+                            // 基礎間距與避讓邏輯
                             let gap = 20;
-                            // --- 修改開始: 動態計算避讓偏移量 ---
-                            let leftOffset = 40;  // 預設向左偏移 (資訊欄在左時，距離 s.x 的距離)
-                            let rightOffset = 20; // 預設向右偏移 (資訊欄在右時，距離 s.x 的距離)
-                            // 如果選單開啟中，加大間距以避開選單 (選單寬度約 130px 左右，設 85 安全)
+                            let leftOffset = 40;
+                            let rightOffset = 20;
+
                             if (isMenuTarget) {
                                 const mode = state.interactionMenu.mode;
-                                // 根據選單模式的寬度設定邊界，確保不重疊
                                 if (mode === 'triage') {
-                                    // 檢傷模式 (2x2 Grid)
-                                    // 左邊界約為 -65 (s.x - 65)，我們設 75 留緩衝
-                                    // 右邊界約為 +15 (s.x + 15)，我們設 25 留緩衝
-                                    leftOffset = 75;
-                                    rightOffset = 25;
+                                    leftOffset = 75; rightOffset = 25;
                                 } else if (mode === 'treatment') {
-                                    // 治療模式 (寬條狀)
-                                    // 左右邊界較寬 (-65 ~ +65)
-                                    leftOffset = 75;
-                                    rightOffset = 75;
+                                    leftOffset = 75; rightOffset = 75;
                                 } else {
-                                    // 主選單 (Main)
-                                    // 左邊界 -40, 右邊界 +85 (含右側醫療按鈕)
-                                    leftOffset = 50;
-                                    rightOffset = 90;
+                                    leftOffset = 50; rightOffset = 90;
                                 }
                             }
 
-                            // --- 修改開始: 判斷顯示位置 ---
+                            // 判斷顯示位置
                             let infoX;
-                            // 如果傷患在玩家的左邊 (s.x < player.x)，資訊欄顯示在傷患右邊
                             if (s.x < player.x) {
                                 infoX = s.x + rightOffset;
                             } else {
-                                // 如果傷患在玩家的右邊 (s.x > player.x)，資訊欄顯示在傷患左邊
-                                // 減去寬度 (w) 和偏移量 (20)
                                 infoX = s.x - leftOffset - w;
                             }
-                            // Y 軸維持原樣 (顯示在上方)
                             const infoY = s.y - 40;
+
+                            // 繪製背景
                             drawRoundedRect(infoX, infoY, w, h, 5, 'rgba(0, 0, 0, 0.8)');
                             ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(infoX, infoY, w, h);
                             ctx.font = '10px "Segoe UI"'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
 
-                            const d = s.data;
+                            // ★★★ 呼吸數值顯示邏輯 ★★★
+                            let respText = "???";
+                            if (s.respRevealed) {
+                                respText = d.resp; // 這裡使用了 d，所以 d 必須在上面定義
+                            } else if (s.respMeasuring) {
+                                respText = "評估中...";
+                            }
+
+                            // 繪製文字內容
                             let yOffset = infoY + 8; const lineHeight = 16;
                             ctx.fillStyle = '#ecf0f1';
                             ctx.fillText(`性別: ${d.sex}`, infoX + 8, yOffset); yOffset += lineHeight;
                             ctx.fillText(`年齡: ${d.age} 歲`, infoX + 8, yOffset); yOffset += lineHeight;
                             ctx.fillText(`傷情: ${d.injuryText}`, infoX + 8, yOffset); yOffset += lineHeight;
-                            ctx.fillText(`呼吸: ${d.resp}`, infoX + 8, yOffset); yOffset += lineHeight;
-                            // 根據狀態顯示脈搏數值 
+
+                            // 顯示呼吸
+                            ctx.fillText(`呼吸: ${respText}`, infoX + 8, yOffset); yOffset += lineHeight;
+
+                            // 顯示脈搏
                             let pulseText = "???";
                             if (s.pulseRevealed) {
                                 pulseText = d.pulse;
@@ -3492,7 +3630,8 @@
                                 pulseText = "評估中...";
                             }
                             ctx.fillText(`脈搏: ${pulseText}`, infoX + 8, yOffset); yOffset += lineHeight;
-                            // 根據狀態顯示意識數值 
+
+                            // 顯示意識
                             let consciousnessText = "???";
                             if (s.consciousnessRevealed) {
                                 consciousnessText = d.consciousness;
@@ -3500,10 +3639,9 @@
                                 consciousnessText = "評估中...";
                             }
                             ctx.fillText(`意識: ${consciousnessText}`, infoX + 8, yOffset); yOffset += lineHeight;
+
                             ctx.fillText(`四肢大出血: ${d.isBleeding ? '是' : '否'}`, infoX + 8, yOffset);
                             yOffset += lineHeight;
-
-
                             ctx.fillText(`汙染: ${d.isContaminated ? '是 (需除汙)' : '否'}`, infoX + 8, yOffset);
                         }
                     });
@@ -3864,63 +4002,56 @@
                 // ★★★ 新增：繪製互動提示箭頭 (與設置區域風格一致) ★★
                 const drawPlacementPreview = (mode) => {
                     if (!mode.active) return;
-
-                    const p = state.player; // 取得玩家參考
+                    const p = state.player;
 
                     ctx.save();
 
-
-                    // --- 計算跟隨玩家頭上的座標 ---
-                    // 不再使用 mode.x/mode.y (地墊座標)，而是直接鎖定玩家座標 (p.x, p.y)
+                    // 1. 計算座標
                     const cx = p.x;
-                    const cy = p.y - 50; // 基礎高度 (角色頭頂上方)
-
-                    // --- 1. 箭頭 (指向角色頭頂) ---
-                    const bounce = Math.sin(state.frameCount * 0.2) * 5; // 上下浮動動畫
+                    const cy = p.y - 50;
+                    const bounce = Math.sin(state.frameCount * 0.2) * 5;
                     const arrowY = cy + bounce;
 
+                    // 2. 繪製箭頭
                     ctx.fillStyle = '#f1c40f';
                     ctx.beginPath();
-                    ctx.moveTo(cx - 10, arrowY - 15); // 左上
-                    ctx.lineTo(cx + 10, arrowY - 15); // 右上
-                    ctx.lineTo(cx, arrowY);           // 下尖端 (指向角色)
+                    ctx.moveTo(cx - 10, arrowY - 15);
+                    ctx.lineTo(cx + 10, arrowY - 15);
+                    ctx.lineTo(cx, arrowY);
                     ctx.closePath();
-
                     ctx.shadowColor = 'black'; ctx.shadowBlur = 4;
                     ctx.fill();
                     ctx.strokeStyle = 'black'; ctx.lineWidth = 1; ctx.stroke();
                     ctx.shadowBlur = 0;
 
-                    // --- 2. 文字設定 ---
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'bottom';
-                    ctx.lineWidth = 3;
-                    ctx.strokeStyle = 'rgba(0,0,0,0.8)'; // 文字黑邊
-
-                    // --- 3. 操作提示 "按 [E]..." (在箭頭上方) ---
+                    // 3. 定義文字位置變數 (確保在同一區塊定義)
                     const promptText = "按 [E] 設置 或 [點擊左鍵]";
                     const promptY = arrowY - 20;
 
+                    // 4. 繪製操作提示
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
                     ctx.font = 'bold 14px "Segoe UI"';
                     ctx.strokeText(promptText, cx, promptY);
                     ctx.fillStyle = '#ffffff';
                     ctx.fillText(promptText, cx, promptY);
 
-                    // --- 4. 區域名稱 (如：輕傷區) (在操作提示上方) ---
+                    // 5. 繪製區域名稱
                     const labels = {
                         'green': '輕傷區', 'yellow': '中傷區', 'red': '重傷區', 'black': '臨時停屍間',
                         'command_post': '指揮站', 'ambulance_staging': '救護車待命區', 'decon': '除汙區'
                     };
-                    const labelText = labels[mode.color] || '';
-                    const labelY = promptY - 20;
+                    const labelText = labels[mode.color] || ''; // 防止 undefined
+                    const labelY = promptY - 20; // 確保使用正確的 promptY
 
-                    // 根據區域類型設定文字顏色
                     const labelColors = {
                         'green': '#2ecc71', 'yellow': '#f1c40f', 'red': '#e74c3c', 'black': '#bdc3c7',
                         'command_post': '#ffffff', 'ambulance_staging': '#3498db', 'decon': '#95a5a6'
                     };
 
-                    ctx.font = 'bold 18px "Segoe UI"'; // 標題字大一點
+                    ctx.font = 'bold 18px "Segoe UI"';
                     ctx.strokeText(labelText, cx, labelY);
                     ctx.fillStyle = labelColors[mode.color] || '#fff';
                     ctx.fillText(labelText, cx, labelY);
@@ -4429,9 +4560,33 @@
                         }
                     }
 
-                    // --- 修改：傷患自行移動邏輯 (取代原本的 splice 移除) ---
+                    // --- 傷患自行移動邏輯 (取代原本的 splice 移除) ---
                     for (let i = state.survivors.length - 1; i >= 0; i--) {
                         let s = state.survivors[i];
+                        // ★★★ 新增：跟隨者移動邏輯 (修復跟隨但不移動的問題) ★★★
+                        if (s.isFollower && !s.onAmbulance && !s.hasArrived) {
+                            const distToP = Math.hypot(p.x - s.x, p.y - s.y);
+
+                            // 檢查是否已進入綠色區域 (若玩家將其帶入安置區，則視為抵達)
+                            const greenMat = state.triageMats.find(m => m.color === 'green');
+                            if (greenMat && s.x > greenMat.x && s.x < greenMat.x + greenMat.w && s.y > greenMat.y && s.y < greenMat.y + greenMat.h) {
+                                s.isFollower = false;
+                                s.hasArrived = true;
+                                addFeedback(s.x, s.y, "跟隨者抵達安置區", "#2ecc71");
+                                checkTriageCounts();
+                                // 補加分邏輯
+                                if (s.triageTag === 'green' && s.data.severity === 'green' && !s.hasBeenMovedScored) {
+                                    setScore(prev => prev + 100);
+                                    addFeedback(s.x, s.y - 50, "移動正確 +100", "#f1c40f");
+                                    s.hasBeenMovedScored = true;
+                                }
+                            } else if (distToP > 40) {
+                                // 保持一定距離 (40px)，避免完全重疊，且移動速度比玩家慢 (設為 1.2)
+                                const followSpeed = 1.2;
+                                s.x += ((p.x - s.x) / distToP) * followSpeed;
+                                s.y += ((p.y - s.y) / distToP) * followSpeed;
+                            }
+                        }
                         if (s.isEvacuating && !s.hasArrived) { // 只有尚未抵達的才需要移動
                             const dest = getTriageDest('green'); // 綠色標籤去綠色區或待命區
 
@@ -4518,6 +4673,22 @@
                         }
                     }
                     state.survivors.forEach(s => {
+                        // ★★★ 綠色傷患靠近觸發跟隨邏輯 (10% 機率) ★★★
+                        // 條件：實際傷情為綠色 + 尚未檢傷 + 目前沒跟隨 + 尚未判定過 + 未上車 + 未抵達
+                        if (s.data.severity === 'green' && !s.triageTag && !s.isFollower && !s.followDecisionMade && !s.onAmbulance && !s.hasArrived) {
+                            const dist = Math.hypot(p.x - s.x, p.y - s.y);
+                            const triggerDist = 250; // 設定觸發距離 (靠近到 250px 內)
+
+                            if (dist < triggerDist) {
+                                s.followDecisionMade = true; // 標記已判定過，避免每幀重複判定
+
+                                // 10% 機率觸發跟隨
+                                if (Math.random() < 0.1) {
+                                    s.isFollower = true;
+                                    addFeedback(s.x, s.y - 40, "傷患正跟著你...", "#f1c40f");
+                                }
+                            }
+                        }
                         if (s.tourniquetTimer !== null && s.tourniquetTimer > 0) {
                             s.tourniquetTimer -= 1 / 240;
                             if (s.tourniquetTimer <= 0) {
@@ -5793,43 +5964,45 @@
                                         {gameState.current.survivors.filter(s => s.triageTag).length === 0 ? (
                                             <div className="text-center text-gray-500 py-4">尚無檢傷紀錄</div>
                                         ) : (
-                                            gameState.current.survivors.map((s, idx) => {
-                                                if (!s.triageTag) return null; // 只顯示已檢傷的
-                                                // ★★★ 判斷是否為鍵盤選中項目 ★★★
-                                                const isKeySelected = (tabletFocus === 'survivor_list' && tabletSelectedIndex === idx);
+                                            gameState.current.survivors
+                                                .filter(s => s.triageTag) // 先篩選出有檢傷分類的傷患
+                                                .map((s, idx) => {
+                                                    if (!s.triageTag) return null; // 只顯示已檢傷的
+                                                    // ★★★ 判斷是否為鍵盤選中項目 ★★★
+                                                    const isKeySelected = (tabletFocus === 'survivor_list' && tabletSelectedIndex === idx);
 
-                                                return (
-                                                    <div
-                                                        key={idx}
-                                                        onClick={() => !s.onAmbulance && setSelectedPatient(s)}
-                                                        className={`p-2 rounded border cursor-pointer transition flex justify-between items-center
+                                                    return (
+                                                        <div
+                                                            key={idx}
+                                                            onClick={() => !s.onAmbulance && setSelectedPatient(s)}
+                                                            className={`p-2 rounded border cursor-pointer transition flex justify-between items-center
             ${selectedPatient === s ? 'bg-green-900/50 border-green-400 ring-1 ring-green-400' : 'bg-slate-800/50 border-slate-700 hover:bg-slate-700'}
             ${isKeySelected ? 'border-yellow-400 ring-2 ring-yellow-400 z-10' : ''} 
             ${s.onAmbulance ? 'opacity-50 cursor-not-allowed' : ''}
         `}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <span className={`w-3 h-3 rounded-full ${s.triageTag === 'red' ? 'bg-red-500' :
-                                                                s.triageTag === 'yellow' ? 'bg-yellow-500' :
-                                                                    s.triageTag === 'green' ? 'bg-green-500' : 'bg-gray-600'
-                                                                }`}></span>
-                                                            <div>
-                                                                <div className="text-sm font-bold text-gray-200">
-                                                                    傷患 #{idx + 1} <span className="text-xs text-gray-400">({s.data.sex}, {s.data.age})</span>
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <span className={`w-3 h-3 rounded-full ${s.triageTag === 'red' ? 'bg-red-500' :
+                                                                    s.triageTag === 'yellow' ? 'bg-yellow-500' :
+                                                                        s.triageTag === 'green' ? 'bg-green-500' : 'bg-gray-600'
+                                                                    }`}></span>
+                                                                <div>
+                                                                    <div className="text-sm font-bold text-gray-200">
+                                                                        傷患 #{idx + 1} <span className="text-xs text-gray-400">({s.data.sex}, {s.data.age})</span>
+                                                                    </div>
+                                                                    <div className="text-xs text-gray-500">{s.data.injuryText}</div>
                                                                 </div>
-                                                                <div className="text-xs text-gray-500">{s.data.injuryText}</div>
                                                             </div>
+                                                            {s.onAmbulance ? (
+                                                                <span className="text-[10px] bg-blue-900 text-blue-300 px-1 py-0.5 rounded">已上車</span>
+                                                            ) : s.hasArrived ? (
+                                                                <span className="text-[10px] bg-gray-700 text-gray-300 px-1 py-0.5 rounded">已安置</span>
+                                                            ) : (
+                                                                <span className="text-[10px] bg-gray-800 text-gray-500 px-1 py-0.5 rounded">待處理</span>
+                                                            )}
                                                         </div>
-                                                        {s.onAmbulance ? (
-                                                            <span className="text-[10px] bg-blue-900 text-blue-300 px-1 py-0.5 rounded">已上車</span>
-                                                        ) : s.hasArrived ? (
-                                                            <span className="text-[10px] bg-gray-700 text-gray-300 px-1 py-0.5 rounded">已安置</span>
-                                                        ) : (
-                                                            <span className="text-[10px] bg-gray-800 text-gray-500 px-1 py-0.5 rounded">待處理</span>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })
+                                                    );
+                                                })
                                         )}
                                     </div>
                                 </div>
@@ -5872,10 +6045,10 @@
                                     { id: 'yellow', label: '中傷區', bg: 'bg-yellow-500', hover: 'hover:bg-yellow-400', text: 'text-black' },
                                     { id: 'red', label: '重傷區', bg: 'bg-red-600', hover: 'hover:bg-red-500', text: 'text-white' },
                                     { id: 'black', label: '黑卡區', bg: 'bg-gray-800', hover: 'hover:bg-gray-700', text: 'text-white' }
-                                ].map(btn => {
+                                ].map((btn, index) => {
                                     // 檢查該顏色是否已存在於場景中
                                     const isUsed = gameState.current.triageMats.some(m => m.color === btn.id);
-
+                                    const isKeySelected = matSelectorIndex === index;
                                     return (
                                         <button
                                             key={btn.id}
@@ -5887,6 +6060,8 @@
                                                     ? 'bg-gray-700 text-gray-500 cursor-not-allowed border border-gray-600'
                                                     : `${btn.bg} ${btn.hover} ${btn.text}`
                                                 }
+                                                     ${/* ★★★ 加入選取高亮樣式：白色粗框 + 放大 ★★★ */''}
+                                                     ${isKeySelected ? 'ring-4 ring-white scale-110 z-10' : ''}
                                             `}
                                         >
                                             {btn.label}
@@ -5898,7 +6073,6 @@
                                 })}
                             </div>
                         )}
-                        {/* --- 修改結束 --- */}
 
                         <div className="absolute top-3 left-3 pointer-events-none select-none">
                             <div className="bg-black/60 p-1.5 mb-1 backdrop-blur-sm border-l-2 border-[#e74c3c] inline-block">
@@ -5950,19 +6124,42 @@
                         {/* ★★★ 右上角遊戲音樂混音器/開關 ★★★ */}
                         <div className="absolute top-3 right-3 z-50 pointer-events-auto flex items-center gap-4">
                             {/* 文字與按鈕容器 (垂直排列) */}
-                            <div className="flex flex-col items-end gap-1 hidden xl:flex">
-                                {/* ★★★ 操作說明文字 (透明背景) ★★★ */}
-                                <div className="text-white/90 text-xs font-bold tracking-wide select-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] hidden xl:block">
-                                    Simple Triage And Rapid Treatment操作說明:鍵盤←↓ ↑→ &nbsp;&nbsp; 互動:E鍵或滑鼠左鍵 &nbsp;&nbsp; 道具欄:I鍵 &nbsp;&nbsp; 取消:C鍵或滑鼠右鍵
+                            <div className="flex flex-col items-end gap-1 ">
+                                <div className="flex gap-2">
+                                    {/* ★★★ 操作說明按鈕 ★★★ */}
+                                    <button
+                                        onClick={() => setShowInstructions(!showInstructions)}
+                                        className={`px-2 py-1 text-xs rounded border shadow-sm transition-all flex items-center gap-1
+                                            ${showInstructions ? 'bg-slate-600 border-slate-400 text-white' : 'bg-slate-700/80 border-slate-500 text-gray-200 hover:bg-slate-600'}
+                                        `}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg>
+                                        操作說明
+                                    </button>
+                                    {/* ★★★ 檢傷流程圖按鈕 ★★★ */}
+                                    <button
+                                        onClick={() => setShowFlowchart(true)}
+                                        className="px-2 py-1 bg-slate-700/80 hover:bg-slate-600 text-gray-200 text-xs rounded border border-slate-500 shadow-sm transition-all flex items-center gap-1"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><line x1="3" x2="21" y1="9" y2="9" /><line x1="9" x2="9" y1="21" y2="9" /></svg>
+                                        檢傷流程圖/Triage flowchart
+                                    </button>
                                 </div>
-                                {/* ★★★ 檢傷流程圖按鈕 ★★★ */}
-                                <button
-                                    onClick={() => setShowFlowchart(true)}
-                                    className="px-2 py-1 bg-slate-700/80 hover:bg-slate-600 text-gray-200 text-xs rounded border border-slate-500 shadow-sm transition-all flex items-center gap-1"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><line x1="3" x2="21" y1="9" y2="9" /><line x1="9" x2="9" y1="21" y2="9" /></svg>
-                                    檢傷流程圖/Triage flowchart
-                                </button>
+                                {/* ★★★ 新增：操作說明下拉內容 ★★★ */}
+                                {showInstructions && (
+                                    <div className="absolute top-full right-0 mt-2 w-72 bg-slate-900/95 border border-slate-500 rounded p-4 shadow-[0_4px_15px_rgba(0,0,0,0.8)] text-gray-200 z-50 animate-fade-in font-sans backdrop-blur-sm">
+                                        <h3 className="font-bold text-yellow-400 text-sm mb-3 border-b border-gray-600 pb-2">
+                                            Simple Triage And Rapid Treatment
+                                        </h3>
+                                        <ul className="space-y-2 text-xs list-disc pl-4">
+                                            <li><span className="text-blue-300 font-bold">移動控制：</span>鍵盤 WASD 或 方向鍵</li>
+                                            <li><span className="text-blue-300 font-bold">互動/選擇：</span>E 鍵 或 滑鼠左鍵</li>
+                                            <li><span className="text-blue-300 font-bold">道具欄：</span>I 鍵 (或點擊左下圖示)</li>
+                                            <li><span className="text-blue-300 font-bold">取消/返回：</span>C 鍵 或 滑鼠右鍵</li>
+                                            <li><span className="text-blue-300 font-bold">選單操作：</span>方向鍵選擇 + Enter確認</li>
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
                             <button
                                 onClick={toggleAudio}
