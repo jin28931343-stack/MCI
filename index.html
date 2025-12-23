@@ -1388,6 +1388,12 @@
                     setResultStats(null);      // 清除結算數據
                     setScore(0);               // 重置分數
 
+                    // ★★★ 重置所有 UI 狀態，防止鍵盤鎖定 ★★★
+                    setShowTabletUI(false);    // 關閉平板
+                    setShowRadioPanel(false);  // 關閉無線電
+                    setShowInventory(false);   // 關閉背包
+                    setShowMatSelector(false); // 關閉地墊選擇
+
                     // 確保 UI 上的計數器歸零 (雖然 useEffect 會重置部分，但手動確保 UI 同步更安全)
                     setSurvivorCount(0);
                     setEvacuatedCount(0);
@@ -1757,6 +1763,11 @@
 
                 // --- 重置 ---
                 state.isGameOver = false;
+                  //重置按鍵與玩家忙碌狀態，解決移動失效問題 
+                state.keys = { w: false, s: false, a: false, d: false };
+                state.player.isBusy = false; 
+                state.player.moving = false;
+                state.player.movingToTarget = false;
                 state.obstacles = [];
                 state.emergencyVehicles = [];
                 state.npcGroups = [];
