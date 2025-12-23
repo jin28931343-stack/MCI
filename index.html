@@ -826,7 +826,7 @@
                                 pointerEvents: 'none',
                                 lineHeight: '1.8'
                             }}>
-                                <div>Ver: 1.5.0</div>
+                                <div>Ver: 1.5.1</div>
                                 <div>Author:莊進宏</div>
                             </div>
                         </div>
@@ -1203,7 +1203,7 @@
                     const viewH = 540; // 遊戲高度
                     let count = 0;
                     state.survivors.forEach(s => {
-                        // ★★★ 修改：只要是「實際輕傷 (Green)」且「在畫面內」，不論是否已檢傷，都強制處理 ★★★
+                        // ★★★ 只要是「實際輕傷 (Green)」且「在畫面內」，不論是否已檢傷，都強制處理 ★★★
                         const isInView = s.x >= camX && s.x <= camX + viewW && s.y >= camY && s.y <= camY + viewH;
 
                         if (isInView && s.data.severity === 'green' && !s.hasArrived && !s.onAmbulance) {
@@ -1392,7 +1392,8 @@
                     else if (severityRoll > 0.50) severity = 'yellow';
                     else severity = 'green';
                 }
-
+                // 行走能力判定 (綠色=可，其他=否) 
+                const canWalk = (severity === 'green') ? '可' : '否';
                 let consciousness = '清醒';
                 let resp = '18次/min';
                 let pulse = '橈動脈摸的到';
@@ -1400,6 +1401,8 @@
                 let isBleeding = false;
                 // 明顯死亡標記 (預設 false) 
                 let isObviousDeath = false;
+                canWalk // ★★★ 回傳行走狀態 ★★★
+
 
                 // 根據等級產生對應的生理數值 (Vitals)
                 if (severity === 'black') {
@@ -1420,7 +1423,12 @@
                         ]);
                     } else {
                         isObviousDeath = false;
-                        injuryText = '臉色發紫';
+                        injuryText = randomChoice([
+                            '臉色變黑',
+                            '無反應',
+                            '趴在地上不動',
+                            '躺在地上不動'
+                        ]);
                     }
                     isBleeding = false;
                 } else if (severity === 'red') {
@@ -1519,7 +1527,11 @@
                 return {
                     sex, age, severity, consciousness, resp, pulse, injuryText, isBleeding, clothColor, isContaminated,
                     initialSeverity: severity,      // 記錄初始傷情 (用於計算紅色優先後送率)
-                    wasContaminated: isContaminated // 記錄是否曾經汙染 (用於計算除汙率)
+                    wasContaminated: isContaminated, // 記錄是否曾經汙染 (用於計算除汙率)
+                    isObviousDeath,                 // 是否明顯死亡
+                    canWalk,                // 真實行走狀態
+                    canWalkRevealed: false, // ★★★ 新增：行走狀態是否已揭露 (預設否，顯示 ???) ★★★
+                    walkMeasuring: false    // ★★★ 新增：是否正在評估標記 (防止重複觸發) ★★★
                 };
             };
 
@@ -2484,6 +2496,7 @@
                     if (menu.active) {
                         const menuX = menu.x - 40; const menuY = menu.y - 60;
 
+
                         if (menu.mode === 'main') {
                             const btnSize = 40;
                             const topY = menuY - 45;
@@ -2497,15 +2510,16 @@
                                     state.player.isBusy = true; // 鎖定玩家
                                     state.keys = { w: false, s: false, a: false, d: false };
                                     state.player.moving = false;
-                                    addFeedback(menu.x, menu.y - 100, "評估呼吸中...", "#f1c40f");
+                                    addFeedback(menu.x, menu.y - 60, "評估呼吸中...", "#f1c40f");
 
                                     setTimeout(() => {
+                                        state.player.isBusy = false; // 倒數結束後解除鎖定
                                         if (state.survivors.includes(s)) {
                                             s.respRevealed = true;
                                             s.respMeasuring = false;
                                             addFeedback(s.x, s.y - 80, "呼吸評估完成", "#2ecc71");
                                         }
-                                        state.player.isBusy = false;
+
                                     }, 2000);
                                 } else if (s.respMeasuring) {
                                     addFeedback(menu.x, menu.y - 100, "正在評估...", "#bdc3c7");
@@ -3083,6 +3097,28 @@
                                 menu.active = true; menu.mode = 'main';
                                 menu.x = s.x; menu.y = s.y; menu.target = s;
                                 menu.selectedIndex = 0;
+                                // 點擊傷患後，若尚未揭露行走能力，則開始 2 秒倒數 
+                                if (s.data && !s.data.canWalkRevealed && !s.data.walkMeasuring) {
+                                    s.data.walkMeasuring = true; // 標記為正在評估
+                                    // 1. 鎖定玩家 (新增這三行)
+                                    state.player.isBusy = true;
+                                    state.keys = { w: false, s: false, a: false, d: false }; // 清除按鍵狀態
+                                    state.player.moving = false; // 停止移動動畫
+                                    // 1. 立即顯示提示 (黃色)
+                                    addFeedback(s.x, s.y - 60, "評估行走能力...", "#f1c40f");
+                                    // 設定 2 秒後揭露答案
+                                    setTimeout(() => {
+                                        // 角色解鎖行動一定要放在最第一行，無條件執行解鎖 
+                                        state.player.isBusy = false;
+                                        // 確保傷患物件還在 (防止遊戲重置後報錯)
+                                        if (state.survivors.includes(s) && s.data) {
+                                            s.data.canWalkRevealed = true;
+                                            s.data.walkMeasuring = false;
+                                            // 可選：加入完成提示
+                                            addFeedback(s.x, s.y - 60, "行走能力評估完成", "#2ecc71");
+                                        }
+                                    }, 2000);
+                                }
 
                             } else {
                                 addFeedback(s.x, s.y, "太遠了!", "#e74c3c");
@@ -3653,7 +3689,7 @@
 
                             // 定義資訊欄尺寸
                             const w = 140;
-                            const h = 130;
+                            const h = 150;
 
                             // 基礎間距與避讓邏輯
                             let gap = 20;
@@ -3699,7 +3735,15 @@
                             ctx.fillText(`性別: ${d.sex}`, infoX + 8, yOffset); yOffset += lineHeight;
                             ctx.fillText(`年齡: ${d.age} 歲`, infoX + 8, yOffset); yOffset += lineHeight;
                             ctx.fillText(`傷情: ${d.injuryText}`, infoX + 8, yOffset); yOffset += lineHeight;
-
+                            // 顯示行走能力 (若未揭露顯示 ???) 
+                            let walkText = "???";
+                            if (d.canWalkRevealed) {
+                                walkText = d.canWalk;
+                            } else if (d.walkMeasuring) {
+                                walkText = "評估中...";
+                            }
+                            // 若以上皆非 (剛打開還沒觸發評估時)，就會維持 "???"
+                            ctx.fillText(`行走: ${walkText}`, infoX + 8, yOffset); yOffset += lineHeight;
                             // 顯示呼吸
                             ctx.fillText(`呼吸: ${respText}`, infoX + 8, yOffset); yOffset += lineHeight;
 
