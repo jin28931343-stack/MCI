@@ -38,6 +38,7 @@ const ASSETS_TO_CACHE = [
     'PIC/player_woman.png',
     'PIC/emt.png',
     'PIC/firefighter.png',
+    'PIC/firefighter_blue.png',
 
     // === 車輛 ===
     'PIC/firetruck.png', 
@@ -148,6 +149,7 @@ self.addEventListener('activate', (event) => {
         })
     );
 });
+
 
 
 
