@@ -826,8 +826,8 @@
                                 pointerEvents: 'none',
                                 lineHeight: '1.8'
                             }}>
-                                <div>Ver: 1.5.1</div>
-                                <div>Author:莊進宏</div>
+                                <div>Ver: 1.5.2</div>
+                                <div>Author:JUNHG JIN-HONG</div>
                             </div>
                         </div>
                     </div>
@@ -5238,6 +5238,10 @@
                                     ctx.save();
                                     ctx.translate(o.x + o.w / 2, o.y + o.h / 2); // 移動到中心
 
+                                    // ★★★ 關鍵修改：若已破壞，設定透明度以便看到下方/內部傷患 ★★★
+                                    if (o.isBreached) {
+                                        ctx.globalAlpha = 0.4; // 設定為半透明 (0.4)
+                                    }
                                     // 判斷車輛方向並旋轉
                                     // 假設原始圖片為直向 (Vertical, 車頭朝上/下)
                                     // 若 o.w > o.h 表示車輛在遊戲中是橫向的，需旋轉 90 度
@@ -5250,15 +5254,19 @@
                                         ctx.drawImage(carImg, -o.w / 2, -o.h / 2, o.w, o.h);
                                     }
 
+
                                     // 如果車輛被破壞，疊加一層半透明黑色與文字
                                     if (o.isBreached) {
                                         ctx.rotate(o.w > o.h ? -Math.PI / 2 : 0); // 轉回來畫文字
-                                        ctx.fillStyle = 'rgba(0,0,0,0.7)';
-                                        ctx.fillRect(-o.w / 2, -o.h / 2, o.w, o.h);
+
                                         ctx.fillStyle = '#fff';
                                         ctx.font = 'bold 12px Arial';
                                         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                                        // 加上陰影確保文字在透明車體上仍可見
+                                        ctx.shadowColor = 'black';
+                                        ctx.shadowBlur = 4;
                                         ctx.fillText("已破壞", 0, 0);
+                                        ctx.shadowBlur = 0; // 重置陰影
                                     } else if (o.breakTimer > 0) {
                                         ctx.rotate(o.w > o.h ? -Math.PI / 2 : 0);
                                         ctx.fillStyle = '#e67e22';
