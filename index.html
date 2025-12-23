@@ -4619,24 +4619,37 @@
                                 group.leaderY += (dy / dist) * speed;
                             }
                         } else if (group.state === 'carrying') {
-                            // --- 修改：搬運邏輯 (包含除汙區判斷) ---
+                            // --- 修改：搬運邏輯 (解決當機與卡住問題) ---
                             let targetTag = group.target.triageTag;
                             let isGoingToDecon = false;
 
                             // 判斷是否需要先去除汙
                             if (group.target.data.isContaminated) {
-                                const deconMat = state.triageMats.find(m => m.color === 'decon');
+                                // ★★★ 修正當機關鍵：使用 filter 定義 deconMats (複數陣列) ★★★
+                                // 原本程式碼可能寫成 const deconMat = ... 導致下方 deconMats 未定義
+                                const deconMats = state.triageMats.filter(m => m.color === 'decon');
                                 const targetMat = state.triageMats.find(m => m.color === targetTag);
 
-                                // 若滿足所有條件，強制先前往除汙區
-                                if (deconMat && targetMat && deconMat.x > targetMat.x) {
-                                    targetTag = 'decon';
-                                    isGoingToDecon = true;
+                                // 只要有任何一個除汙區位於安置區外側 (x > targetMat.x)，就觸發除汙流程
+                                if (deconMats.length > 0 && targetMat) {
+                                    const hasValidDecon = deconMats.some(dm => dm.x > targetMat.x);
+
+                                    if (hasValidDecon) {
+                                        targetTag = 'decon';
+                                        isGoingToDecon = true;
+                                    }
                                 }
                             }
 
-                            // 取得目的地座標 (可能是原本的檢傷區，或是暫時的除汙區)
-                            const dest = getTriageDest(targetTag);
+                            // ★★★ 關鍵修復：鎖定目的地 (防止每一幀重新計算隨機點導致NPC原地抖動) ★★★
+                            // 如果沒有已分配的目的地，或是目標標籤改變了 (例如剛除汙完變成要去紅區)，則重新計算並鎖定
+                            if (!group.assignedDest || group.assignedTag !== targetTag) {
+                                group.assignedDest = getTriageDest(targetTag);
+                                group.assignedTag = targetTag;
+                            }
+
+                            // 使用鎖定的目的地
+                            const dest = group.assignedDest;
                             const dx = dest.x - group.leaderX;
                             const dy = dest.y - group.leaderY;
                             const dist = Math.hypot(dx, dy);
@@ -4650,10 +4663,10 @@
                                     group.target.data.isContaminated = false; // 清除汙染狀態
                                     addFeedback(group.leaderX, group.leaderY, "已除汙", "#95a5a6");
 
-                                    // 重要：這裡不執行放下傷患 (drop) 的動作
-                                    // 因為 isContaminated 已被設為 false，下一幀更新時，
-                                    // 上方的 if 判斷會不成立，目的地會自動切換回原本的檢傷區 (targetTag)，
-                                    // NPC 就會帶著傷患繼續往正確區域前進。
+                                    // 重要：清除鎖定的目的地，讓下一幀重新計算前往最終安置區的路徑
+                                    group.assignedDest = null;
+                                    group.assignedTag = null;
+
                                 } else {
                                     // --- Case B: 抵達最終安置區域 ---
                                     group.target.x = dest.x;
@@ -4673,17 +4686,17 @@
                                         }
                                     } else {
                                         // ★★★ 重點：若無地墊，雖然只是暫置，但必須標記為 hasArrived = true ★★★
-                                        // ★★★ 這樣才能防止系統判定該傷患需要「再次搬運」，導致原地無限迴圈 ★★★
                                         group.target.hasArrived = true;
                                         addFeedback(group.leaderX, group.leaderY - 20, "無對應區域，暫置於此", "#bdc3c7");
                                     }
-
-
 
                                     // NPC 重置狀態，準備去搜尋下一個傷患
                                     group.target = null;
                                     group.carrying = false;
                                     group.state = 'searching';
+                                    group.assignedDest = null; // 清除目的地
+                                    group.assignedTag = null;
+
                                     checkTriageCounts(); // 搬運完成後檢查計數 
                                     state.carrySystemCooldown = 1200;
                                 }
@@ -4733,7 +4746,7 @@
                             const distToP = Math.hypot(p.x - s.x, p.y - s.y);
                             const greenMat = state.triageMats.find(m => m.color === 'green');
 
-                            // 1. ★★★ 新增：檢查是否進入消防車左側區域 (安全區) ★★★
+                            // 1. ★★★ 檢查是否進入消防車左側區域 (安全區) ★★★
                             // 若傷患被帶到消防車左邊，自動停止跟隨並前往對應區域(綠區或集結點)
                             if (s.x < fireTruckX) {
                                 s.isFollower = false; // 停止跟隨
