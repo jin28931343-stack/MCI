@@ -826,7 +826,7 @@
                                 pointerEvents: 'none',
                                 lineHeight: '1.8'
                             }}>
-                                <div>Ver: 1.4.0</div>
+                                <div>Ver: 1.5.0</div>
                                 <div>Author:莊進宏</div>
                             </div>
                         </div>
@@ -838,6 +838,10 @@
 
         function App() {
             const canvasRef = useRef(null);
+            // ★★★ 1. 新增：偵測是否為行動裝置/平板 ★★★
+            // 這會檢查 UserAgent，如果是手機或平板，isMobile 就會是 true
+            const isMobile = useRef(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)).current;
+
             const [gameStarted, setGameStarted] = useState(false);
             //  控制人物選擇畫面的狀態 
             const [showCharacterSelect, setShowCharacterSelect] = useState(false);
@@ -1364,23 +1368,23 @@
                 }, 50);
             };
 
-           const generateSurvivorData = (isTrapped) => {
+            const generateSurvivorData = (isTrapped) => {
                 const sex = Math.random() > 0.5 ? '男' : '女';
                 const age = Math.floor(Math.random() * (70 - 12 + 1)) + 12;
-                
-                 // ：隨機選取工具函式 (語法：randomChoice([選項A, 選項B, 選項C...])) 
+
+                // ：隨機選取工具函式 (語法：randomChoice([選項A, 選項B, 選項C...])) 
                 // 這行程式碼的意思是：從傳入的陣列中，隨機選出一個項目回傳
                 const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
                 // 先決定傷患的真實顏色 (Severity)
                 const severityRoll = Math.random();
                 let severity = 'green';
-                
+
                 if (isTrapped) {
-                    if (Math.random() > 0.7) { 
+                    if (Math.random() > 0.7) {
                         severity = 'black';
-                    } else { 
-                        severity = 'red'; 
+                    } else {
+                        severity = 'red';
                     }
                 } else {
                     if (severityRoll > 0.9) severity = 'black';
@@ -1406,17 +1410,17 @@
                     // 明顯死亡：腦漿溢出、臟器外露 (絕對救不回來)
                     // 一般OHCA：可能透過暢通呼吸道恢復
                     if (Math.random() > 0.8) { // 20% 機率為明顯死亡
-                         isObviousDeath = true;
-                  // 使用 randomChoice 設定多種隨機傷情 
-                         injuryText = randomChoice([
-                             '頭部破裂、腦漿溢出', 
-                             '腹部撕裂、臟器外露', 
-                             '身體斷成兩截', 
-                             '頭部重創、變形'
-                         ]);
+                        isObviousDeath = true;
+                        // 使用 randomChoice 設定多種隨機傷情 
+                        injuryText = randomChoice([
+                            '頭部破裂、腦漿溢出',
+                            '腹部撕裂、臟器外露',
+                            '身體斷成兩截',
+                            '頭部重創、變形'
+                        ]);
                     } else {
-                         isObviousDeath = false;
-                         injuryText = '臉色發紫';
+                        isObviousDeath = false;
+                        injuryText = '臉色發紫';
                     }
                     isBleeding = false;
                 } else if (severity === 'red') {
@@ -1425,7 +1429,7 @@
                     // 紅色患者維持原有的 Switch 邏輯 (因為紅卡通常綁定特定生理數值組合)
                     // 想在某個 Case 裡隨機也可以用 randomChoice
                     const redType = Math.floor(Math.random() * 6) + 1; // 產生 1~6 的隨機數
-                    
+
                     switch (redType) {
                         case 1: // 紅1：呼吸急促 (>30)
                             resp = '32次/min';
@@ -1471,39 +1475,39 @@
                             break;
                     }
                 } else if (severity === 'yellow') {
-                     // ★★★ 2. ：使用 randomChoice 設定 3 種以上的隨機項目 ★★★
-                     consciousness = '可以聽指令';
-                     
-                     // 設定隨機呼吸 (範例：4種)
-                     resp = randomChoice(['18次/min', '20次/min', '22次/min', '24次/min']);
-                     
-                     // 設定隨機脈搏 (範例：3種)
-                     pulse = randomChoice(['CRT<2sec', '橈動脈摸的到', '脈搏強且規律']);
-                     
-                     // 設定隨機傷情 (範例：5種)
-                     injuryText = randomChoice([
-                         '大腿骨折、無法行走', 
-                         '小腿變形、劇烈疼痛', 
-                         '腹部疼痛、無法站立', 
-                         '腳踝嚴重扭傷', 
-                         '背部挫傷、移動困難'
-                     ]);
-                     isBleeding = false;
-                } else { 
-                      // 綠色：可行走
-                     severity = 'green'; 
-                     consciousness = '清醒'; 
-                     resp = '18次/min';
-                     pulse = '橈動脈摸的到';
-                     
-                     // ★★★ 3. ：綠色傷患隨機傷情 (範例：4種) ★★★
-                     injuryText = randomChoice([
-                         '手部擦傷、驚嚇', 
-                         '臉部輕微割傷', 
-                         '手臂瘀青、疼痛', 
-                         '輕微腦震盪、頭暈'
-                     ]);
-                     isBleeding = false;
+                    // ★★★ 2. ：使用 randomChoice 設定 3 種以上的隨機項目 ★★★
+                    consciousness = '可以聽指令';
+
+                    // 設定隨機呼吸 (範例：4種)
+                    resp = randomChoice(['18次/min', '20次/min', '22次/min', '24次/min']);
+
+                    // 設定隨機脈搏 (範例：3種)
+                    pulse = randomChoice(['CRT<2sec', '橈動脈摸的到', '脈搏強且規律']);
+
+                    // 設定隨機傷情 (範例：5種)
+                    injuryText = randomChoice([
+                        '大腿骨折、無法行走',
+                        '小腿變形、劇烈疼痛',
+                        '腹部疼痛、無法站立',
+                        '腳踝嚴重扭傷',
+                        '背部挫傷、移動困難'
+                    ]);
+                    isBleeding = false;
+                } else {
+                    // 綠色：可行走
+                    severity = 'green';
+                    consciousness = '清醒';
+                    resp = '18次/min';
+                    pulse = '橈動脈摸的到';
+
+                    // ★★★ 3. ：綠色傷患隨機傷情 (範例：4種) ★★★
+                    injuryText = randomChoice([
+                        '手部擦傷、驚嚇',
+                        '臉部輕微割傷',
+                        '手臂瘀青、疼痛',
+                        '輕微腦震盪、頭暈'
+                    ]);
+                    isBleeding = false;
                 }
 
 
@@ -3243,7 +3247,11 @@
 
                 const drawEmergencyVehicle = (v) => {
                     ctx.save(); ctx.translate(v.x + v.w / 2, v.y + v.h / 2); ctx.rotate(v.angle);
-                    ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 10;
+                    // ★★★ 加入此判斷：只有非平板才開陰影 ★★★
+                    if (!isMobile) {
+                        ctx.shadowColor = 'rgba(0,0,0,0.4)';
+                        ctx.shadowBlur = 10;
+                    }
                     if (v.type === 'firetruck') {
                         // ★★★ 若有消防車圖片則繪製圖片，否則繪製原本的向量圖 ★★★
                         const ftImg = assets.firetruck;
@@ -4092,7 +4100,10 @@
                     ctx.lineTo(cx + 10, arrowY - 15);
                     ctx.lineTo(cx, arrowY);
                     ctx.closePath();
-                    ctx.shadowColor = 'black'; ctx.shadowBlur = 4;
+                    if (!isMobile) {
+                        ctx.shadowColor = 'black';
+                        ctx.shadowBlur = 4;
+                    }
                     ctx.fill();
                     ctx.strokeStyle = 'black'; ctx.lineWidth = 1; ctx.stroke();
                     ctx.shadowBlur = 0;
@@ -4153,7 +4164,11 @@
                         ctx.lineTo(x, arrowY);
                         ctx.closePath();
 
-                        ctx.shadowColor = 'black'; ctx.shadowBlur = 4;
+                        // ★★★ 優化：平板關閉陰影 ★★★
+                        if (!isMobile) {
+                            ctx.shadowColor = 'black';
+                            ctx.shadowBlur = 4;
+                        }
                         ctx.fill();
                         ctx.strokeStyle = 'black'; ctx.lineWidth = 1; ctx.stroke();
                         ctx.shadowBlur = 0;
@@ -4961,7 +4976,9 @@
                     state.hazards.forEach(h => {
                         // 只有未被滅火的火焰會持續產生煙霧
                         if (h.type === 'fire' && !h.beingExtinguished) {
-                            // 控制煙霧產生頻率 (0.7 = 30% 機率每幀產生)
+                            // ★★★ 2. 修改：平板模式下減少粒子生成機率 ★★★
+                            // 原本是 > 0.7 (30%)，平板改成 > 0.85 (15%)
+                            const smokeThreshold = isMobile ? 0.85 : 0.7;
                             if (Math.random() > 0.95) {
                                 state.particles.push({
                                     x: h.x + (Math.random() - 0.5) * h.r,   // 在火焰範圍內隨機位置
@@ -5077,9 +5094,12 @@
 
                     state.decorations.forEach(d => {
                         if (d.type === 'skid') {
-                            ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.angle); drawRect(0, 0, d.w, d.h, 'rgba(0,0,0,0.6)'); ctx.restore();
+                            //  3. 平板模式移除旋轉與透明度計算，或直接簡化繪製 
+                            ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.angle);
+                            drawRect(0, 0, d.w, d.h, 'rgba(0,0,0,0.6)');
+                            ctx.restore();
                         } else if (d.type === 'oil') {
-                            // ★★★ 修改：若有圖片則繪製圖片，否則繪製原本的黑色橢圓 ★★★
+                            // 若有圖片則繪製圖片，否則繪製原本的黑色橢圓 
                             const img = assets.oil;
                             if (img && img.complete && img.naturalWidth !== 0) {
                                 ctx.save();
@@ -5356,10 +5376,15 @@
                     state.feedbacks.forEach(f => {
                         ctx.fillStyle = f.color;
                         ctx.font = 'bold 14px "Courier New"';
-                        ctx.shadowColor = 'black';
-                        ctx.shadowBlur = 2;
+                        // ★★★ 優化：平板模式不畫文字陰影 ★★★
+                        if (!isMobile) {
+                            ctx.shadowColor = 'black';
+                            ctx.shadowBlur = 2;
+                        }
+
                         ctx.fillText(f.text, f.x - 20, f.y);
-                        ctx.shadowBlur = 0;
+
+                        if (!isMobile) ctx.shadowBlur = 0; // 重置
                     });
 
                     ctx.restore();
@@ -6476,4 +6501,3 @@
 </body>
 
 </html>
-
