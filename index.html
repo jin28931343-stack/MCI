@@ -1289,16 +1289,20 @@
                     setTabletFocus('survivor_list');
                     setTabletSelectedIndex(0);
                 } else if (['command_post', 'ambulance_staging', 'decon'].includes(item.type)) {
-                    // ★★★ 限制特殊區域只能設置一個 ★★★
-                    // 檢查場景中是否已存在相同類型的區域 (使用 color 作為識別)
-                    const alreadyExists = gameState.current.triageMats.some(m => m.color === item.type);
+                    // ★★★ 修改：限制特殊區域數量 (除汙區可設置兩個) ★★★
+                    // 檢查場景中已存在該類型區域的數量
+                    const existingCount = gameState.current.triageMats.filter(m => m.color === item.type).length;
 
-                    if (alreadyExists) {
-                        // 顯示提示訊息 (直接操作 state 因為 addFeedback 在 useEffect 內部無法直接呼叫)
+                    // 設定數量上限：除汙區 (decon) 為 2，其他為 1
+                    let limit = 1;
+                    if (item.type === 'decon') limit = 2;
+
+                    if (existingCount >= limit) {
+                        // 顯示提示訊息 (根據上限顯示不同文字)
                         gameState.current.feedbacks.push({
                             x: gameState.current.player.x,
                             y: gameState.current.player.y - 50,
-                            text: "此區域只能設置一個",
+                            text: limit > 1 ? `此區域最多設置 ${limit} 個` : "此區域只能設置一個",
                             color: "#e74c3c",
                             life: 60,
                             vy: -0.5
@@ -1317,7 +1321,6 @@
                         valid: false,
                         x: 0, y: 0
                     };
-
                 } else if (item.type === 'radio') {
                     setShowRadioPanel(true); // 開啟無線電面板
 
@@ -1601,6 +1604,11 @@
                 const firefighterImg = new Image();
                 firefighterImg.src = 'PIC/firefighter.png';
                 assets.firefighter = firefighterImg;
+
+                // ★★★ 載入靜態消防員 (藍色/待命) 插圖 ★★★
+                const firefighterBlueImg = new Image();
+                firefighterBlueImg.src = 'PIC/firefighter_blue.png'; // 預留位置：請確保 PIC 資料夾內有此圖片
+                assets.firefighter_blue = firefighterBlueImg;
 
                 // ★★★ 載入消防車圖片 (預留插圖位置) ★★★
                 const firetruckImg = new Image();
@@ -3897,7 +3905,27 @@
                     });
                 };
                 const drawStaticNpcs = (npcs) => {
-                    npcs.forEach(npc => { drawFirefighterHighRes(npc.x, npc.y, 0, '#1a253a', state.frameCount, false); });
+                    npcs.forEach(npc => {
+                        // ★★★ 修改：嘗試繪製靜態消防員插圖 (取代原本的向量繪製) ★★★
+                        const img = assets.firefighter_blue;
+
+                        // 檢查圖片是否載入成功
+                        if (img && img.complete && img.naturalWidth !== 0) {
+                            ctx.save();
+                            ctx.translate(npc.x, npc.y);
+
+                            // 設定圖片繪製尺寸 (寬 40 x 高 40，可依據您的圖片比例調整)
+                            const w = 120;
+                            const h = 60;
+
+                            // 繪製圖片 (置中)
+                            ctx.drawImage(img, -w / 2, -h / 2, w, h);
+                            ctx.restore();
+                        } else {
+                            // (備案) 若無圖片，使用原本的向量繪製 (藍色制服)
+                            drawFirefighterHighRes(npc.x, npc.y, 0, '#1a253a', state.frameCount, false);
+                        }
+                    });
                     state.decorations.forEach(d => {
                         if (d.type === 'stretcher') {
                             ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 6;
@@ -3906,13 +3934,12 @@
                     });
                 };
 
-
                 const drawTriageMats = (mats) => {
                     mats.forEach(m => {
                         ctx.save();
-                        // ★★★ 新增：紅色區域繪製邏輯 (優先使用圖片) ★★★
+                        // ★★★ 紅色區域繪製邏輯 (優先使用圖片) ★★★
                         if (m.color === 'red' && assets.red_zone && assets.red_zone.complete && assets.red_zone.naturalWidth !== 0) {
-                            // ★★★ 修改：自定義圖片尺寸 (可在此處修改寬高數值) ★★★
+                            // ★★★ 自定義圖片尺寸 (可在此處修改寬高數值) ★★★
                             const drawW = 200; // 自定義寬度 (原 m.w 約為 100-160)
                             const drawH = 200; // 自定義高度
 
@@ -3935,9 +3962,9 @@
                             ctx.restore();
                             return; // ★ 成功繪製圖片後，直接結束函式
                         }
-                        // ★★★ 新增：黃色區域繪製邏輯 (優先使用圖片) ★★★
+                        // ★★★ 黃色區域繪製邏輯 (優先使用圖片) ★★★
                         if (m.color === 'yellow' && assets.yellow_zone && assets.yellow_zone.complete && assets.yellow_zone.naturalWidth !== 0) {
-                            // ★★★ 修改：自定義圖片尺寸 (可在此處修改寬高數值) ★★★
+                            // ★★★ 自定義圖片尺寸 (可在此處修改寬高數值) ★★★
                             const drawW = 150; // 自定義寬度
                             const drawH = 150; // 自定義高度
 
@@ -4353,8 +4380,9 @@
                     // --- 新增：計算目的地 (地墊中心隨機點 或 消防車後方) ---
                     const getTriageDest = (tag) => {
                         const mat = state.triageMats.find(m => m.color === tag);
-                        if (mat) {
-                            // 若有對應顏色的地墊，回傳地墊範圍內的隨機點
+                        if (mats.length > 0) {
+                            // 隨機選一個地墊，達到分流效果 (若有兩個除汙區，NPC會隨機選一個去)
+                            const mat = mats[Math.floor(Math.random() * mats.length)];
                             return {
                                 x: mat.x + 10 + Math.random() * (mat.w - 20),
                                 y: mat.y + 10 + Math.random() * (mat.h - 20)
