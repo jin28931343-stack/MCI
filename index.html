@@ -4379,7 +4379,8 @@
                     }
                     // --- 新增：計算目的地 (地墊中心隨機點 或 消防車後方) ---
                     const getTriageDest = (tag) => {
-                        const mat = state.triageMats.find(m => m.color === tag);
+                        // 使用 filter 取得陣列並命名為 mats，解決變數未定義導致的當機 
+                        const mats = state.triageMats.filter(m => m.color === tag);
                         if (mats.length > 0) {
                             // 隨機選一個地墊，達到分流效果 (若有兩個除汙區，NPC會隨機選一個去)
                             const mat = mats[Math.floor(Math.random() * mats.length)];
