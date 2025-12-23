@@ -498,12 +498,38 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg> :
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>;
         // ★★★ 新增：人物選擇畫面元件 ★★★
-        const CharacterSelection = ({ onSelect }) => {
+        // ★★★ 新增：人物選擇畫面元件 (修改：接收 totalSurvivors 與 setTotalSurvivors) ★★★
+        const CharacterSelection = ({ onSelect, totalSurvivors, setTotalSurvivors }) => {
+            // 產生 15~30 的選項陣列
+            const options = Array.from({ length: 16 }, (_, i) => i + 15);
+
             return (
                 <div className="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center font-mono text-white animate-fade-in">
-                    <h2 className="text-3xl mb-12 font-bold tracking-widest text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
+                    <h2 className="text-3xl mb-6 font-bold tracking-widest text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
                         選擇角色 / SELECT CHARACTER
                     </h2>
+
+                    {/* ★★★ 新增：傷患人數選擇選單 (15~30人) ★★★ */}
+                    <div className="mb-10 flex flex-col items-center z-10 animate-fade-in">
+                        <label className="mb-2 text-blue-400 font-bold tracking-wider text-sm">
+                            設定傷患人數 / SURVIVOR COUNT
+                        </label>
+                        <div className="relative">
+                            <select
+                                value={totalSurvivors}
+                                onChange={(e) => setTotalSurvivors(parseInt(e.target.value))}
+                                className="appearance-none bg-slate-900 border-2 border-blue-500 hover:border-yellow-400 text-white text-xl font-bold py-2 px-8 rounded cursor-pointer focus:outline-none focus:shadow-[0_0_20px_rgba(59,130,246,0.5)] transition-all text-center w-48"
+                            >
+                                {options.map(num => (
+                                    <option key={num} value={num}>{num} 人</option>
+                                ))}
+                            </select>
+                            {/* 自定義下拉箭頭圖示 */}
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-blue-500">
+                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                            </div>
+                        </div>
+                    </div>
                     <div className="flex gap-10 md:gap-24">
                         {/* 男性選項 */}
                         <div
@@ -826,7 +852,7 @@
                                 pointerEvents: 'none',
                                 lineHeight: '1.8'
                             }}>
-                                <div>Ver: 1.5.2</div>
+                                <div>Ver: 1.5.3</div>
                                 <div>Author:JUNHG JIN-HONG</div>
                             </div>
                         </div>
@@ -1030,7 +1056,9 @@
                 sp: 100, maxSp: 100
             });
 
-            const totalSurvivors = 30;
+            //  totalSurvivors 改為 State，預設 30，範圍 15-30 
+            // 原本是 const totalSurvivors = 30;
+            const [totalSurvivors, setTotalSurvivors] = useState(30);
 
             const gameState = useRef({
                 isGameOver: false,
@@ -1534,7 +1562,12 @@
                     isObviousDeath,                 // 是否明顯死亡
                     canWalk,                // 真實行走狀態
                     canWalkRevealed: false, // ★★★ 新增：行走狀態是否已揭露 (預設否，顯示 ???) ★★★
-                    walkMeasuring: false    // ★★★ 新增：是否正在評估標記 (防止重複觸發) ★★★
+                    walkMeasuring: false,    // ★★★ 新增：是否正在評估標記 (防止重複觸發) ★★★
+                    // ★★★ 新增：記錄初始治療需求 (用於結算統計分母) ★★★
+                    // 只有初始出血者才算入止血帶分母
+                    needTourniquet: isBleeding,
+                    // 只有初始無呼吸且非明顯死亡者，才算入呼吸道分母
+                    needAirway: (resp === '無' && !isObviousDeath)
                 };
             };
 
@@ -2502,6 +2535,53 @@
                         }
                     }
                     if (menu.active) {
+                        if (menu.mode === 'select_target') {
+                            const btnW = 160;
+                            const btnH = 40;
+                            const gap = 5;
+                            const list = menu.candidates || [];
+
+                            for (let i = 0; i < list.length; i++) {
+                                const bx = menu.x + 5;
+                                const by = menu.y + 5 + i * (btnH + gap);
+
+                                // 檢查是否點擊到按鈕
+                                if (clickX >= bx && clickX <= bx + btnW - 10 && clickY >= by && clickY <= by + btnH) {
+                                    const s = list[i];
+
+                                    // 設定目標並切換回主選單
+                                    menu.mode = 'main';
+                                    menu.target = s;
+                                    menu.x = s.x;
+                                    menu.y = s.y;
+                                    menu.candidates = null;
+
+                                    // 觸發互動與評估邏輯
+                                    s.hasInteracted = true;
+                                    if (s.data && !s.data.canWalkRevealed && !s.data.walkMeasuring) {
+                                        s.data.walkMeasuring = true;
+                                        state.player.isBusy = true;
+                                        state.keys = { w: false, s: false, a: false, d: false };
+                                        state.player.moving = false;
+                                        addFeedback(s.x, s.y - 60, "評估行走能力...", "#f1c40f");
+                                        setTimeout(() => {
+                                            state.player.isBusy = false;
+                                            if (state.survivors.includes(s) && s.data) {
+                                                s.data.canWalkRevealed = true;
+                                                s.data.walkMeasuring = false;
+                                                addFeedback(s.x, s.y - 60, "評估完成", "#2ecc71");
+                                            }
+                                        }, 2000);
+                                    }
+                                    return;
+                                }
+                            }
+                            // 若點擊空白處，關閉選單
+                            menu.active = false;
+                            menu.mode = 'main';
+                            menu.candidates = null;
+                            return;
+                        }
                         const menuX = menu.x - 40; const menuY = menu.y - 60;
 
 
@@ -2698,10 +2778,13 @@
                                 menu.mode = 'main';
                                 statsTracker.current.tourniquet.total++;
 
-                                // 2. 判斷是否需要止血 (若無出血，直接提示不需等待)
-                                if (targetSurvivor && targetSurvivor.data && !targetSurvivor.data.isBleeding) {
+
+                                // 2. 判斷是否需要止血 (若無出血，直接提示不需等待並返回)
+                                // ★★★ 修正：先檢查狀態，若無出血則中止，避免進入倒數 ★★★
+                                if (!targetSurvivor.data.isBleeding) {
+                                    addFeedback(targetSurvivor.x, targetSurvivor.y - 50, "無出血", "#bdc3c7");
                                     addFeedback(tx, ty, "無需使用止血帶", "#bdc3c7");
-                                    return; // 結束，不進入等待
+                                    return; // 結束
                                 }
 
                                 // 3. 若有出血 -> 鎖定玩家狀態並等待 2 秒
@@ -2716,17 +2799,25 @@
                                     state.player.isBusy = false; // 解除鎖定
 
                                     if (targetSurvivor && targetSurvivor.data) {
+                                        // ★★★ 修正：在延遲結束後才檢查與變更狀態 ★★★
                                         if (targetSurvivor.data.isBleeding && !targetSurvivor.isDead) {
                                             //  10% 機率止血失敗 
                                             if (Math.random() < 0.1) {
                                                 addFeedback(tx, ty, "仍再出血!", "#e74c3c");
                                             } else {
+                                                // 成功止血：加分並更新狀態
                                                 setScore(prev => prev + 100);
+                                                // 確保 statsTracker 有正確結構，若無則忽略
+                                                if (statsTracker.current.tourniquet) statsTracker.current.tourniquet.correct++;
+
+                                                targetSurvivor.data.isBleeding = false; // 更新出血狀態
+                                                targetSurvivor.tourniquetTimer = null; // 移除止血帶計時器
+
                                                 addFeedback(tx, ty - 40, "止血正確 +100", "#f1c40f");
-                                                targetSurvivor.data.isBleeding = false;
-                                                targetSurvivor.tourniquetTimer = null;
                                                 addFeedback(tx, ty, "止血成功", "#2ecc71");
                                             }
+                                        } else if (targetSurvivor.isDead) {
+                                            addFeedback(tx, ty, "已死亡", "#7f8c8d");
                                         } else {
                                             // 預防性顯示 (雖前面已檢查，但防止異步狀態變更)
                                             addFeedback(tx, ty, "無需使用止血帶", "#bdc3c7");
@@ -3091,48 +3182,78 @@
 
 
                     // 檢查傷患
+                    const candidates = []; // 用來收集重疊的傷患
+
                     for (let s of state.survivors) {
                         const dist = Math.hypot(clickX - s.x, clickY - s.y);
+                        // 判定點擊範圍
                         if (dist < 45) {
-                            clickedSomething = true;
-                            let blockedByFire = state.hazards.some(h => Math.hypot(s.x - h.x, s.y - h.y) < h.r + 30);
-                            if (blockedByFire) { addFeedback(s.x, s.y, "前方有火!", "#e74c3c"); return; }
-
-                            if (s.trappedInVehicle && !s.trappedInVehicle.isBreached) { addFeedback(s.x, s.y, "受困車內!", "#e74c3c"); return; }
-
-                            const distToPlayer = Math.hypot(player.x - s.x, player.y - s.y);
-                            if (distToPlayer < interactRadius) {
-                                menu.active = true; menu.mode = 'main';
-                                menu.x = s.x; menu.y = s.y; menu.target = s;
-                                menu.selectedIndex = 0;
-                                // 點擊傷患後，若尚未揭露行走能力，則開始 2 秒倒數 
-                                if (s.data && !s.data.canWalkRevealed && !s.data.walkMeasuring) {
-                                    s.data.walkMeasuring = true; // 標記為正在評估
-                                    // 1. 鎖定玩家 (新增這三行)
-                                    state.player.isBusy = true;
-                                    state.keys = { w: false, s: false, a: false, d: false }; // 清除按鍵狀態
-                                    state.player.moving = false; // 停止移動動畫
-                                    // 1. 立即顯示提示 (黃色)
-                                    addFeedback(s.x, s.y - 60, "評估行走能力...", "#f1c40f");
-                                    // 設定 2 秒後揭露答案
-                                    setTimeout(() => {
-                                        // 角色解鎖行動一定要放在最第一行，無條件執行解鎖 
-                                        state.player.isBusy = false;
-                                        // 確保傷患物件還在 (防止遊戲重置後報錯)
-                                        if (state.survivors.includes(s) && s.data) {
-                                            s.data.canWalkRevealed = true;
-                                            s.data.walkMeasuring = false;
-                                            // 可選：加入完成提示
-                                            addFeedback(s.x, s.y - 60, "行走能力評估完成", "#2ecc71");
-                                        }
-                                    }, 2000);
-                                }
-
-                            } else {
-                                addFeedback(s.x, s.y, "太遠了!", "#e74c3c");
+                            // 排除受困且未破壞的
+                            if (s.trappedInVehicle && !s.trappedInVehicle.isBreached) {
+                                addFeedback(s.x, s.y, "受困車內!", "#e74c3c");
+                                clickedSomething = true;
+                                continue;
                             }
+                            // 排除被火擋住的
+                            let blockedByFire = state.hazards.some(h => Math.hypot(s.x - h.x, s.y - h.y) < h.r + 30);
+                            if (blockedByFire) {
+                                addFeedback(s.x, s.y, "前方有火!", "#e74c3c");
+                                clickedSomething = true;
+                                continue;
+                            }
+                            // 加入候選名單
+                            candidates.push(s);
+                        }
+                    }
+
+                    // 處理點擊結果
+                    if (candidates.length > 0) {
+                        clickedSomething = true;
+
+                        // 過濾距離玩家太遠的
+                        const reachable = candidates.filter(s => Math.hypot(player.x - s.x, player.y - s.y) < interactRadius);
+
+                        if (reachable.length === 0) {
+                            addFeedback(clickX, clickY, "太遠了!", "#e74c3c");
                             return;
                         }
+
+                        if (reachable.length === 1) {
+                            // ★★★ 單一目標：執行原本的選單開啟邏輯 ★★★
+                            const s = reachable[0];
+                            menu.active = true; menu.mode = 'main';
+                            menu.x = s.x; menu.y = s.y; menu.target = s;
+                            menu.selectedIndex = 0;
+                            s.hasInteracted = true;
+
+                            // 自動評估行走能力
+                            if (s.data && !s.data.canWalkRevealed && !s.data.walkMeasuring) {
+                                s.data.walkMeasuring = true;
+                                state.player.isBusy = true;
+                                state.keys = { w: false, s: false, a: false, d: false };
+                                state.player.moving = false;
+                                addFeedback(s.x, s.y - 60, "評估行走能力...", "#f1c40f");
+                                setTimeout(() => {
+                                    state.player.isBusy = false;
+                                    if (state.survivors.includes(s) && s.data) {
+                                        s.data.canWalkRevealed = true;
+                                        s.data.walkMeasuring = false;
+                                        addFeedback(s.x, s.y - 60, "評估完成", "#2ecc71");
+                                    }
+                                }, 2000);
+                            }
+                        } else {
+                            // ★★★ 多個目標重疊：開啟選擇選單 ★★★
+                            menu.active = true;
+                            menu.mode = 'select_target';
+                            menu.x = clickX + 20;
+                            menu.y = clickY - 20;
+                            menu.candidates = reachable;
+                            // 依 Y 軸排序 (讓下方的顯示在前面)
+                            menu.candidates.sort((a, b) => a.y - b.y);
+                            addFeedback(clickX, clickY, "請選擇目標", "#fff");
+                        }
+                        return;
                     }
 
                     if (!clickedSomething && !state.placementMode.active) {
@@ -3388,6 +3509,52 @@
 
                 const drawMenu = (menu) => {
                     if (!menu.active) return;
+                    if (menu.mode === 'select_target') {
+                        const btnW = 160;
+                        const btnH = 40;
+                        const gap = 5;
+                        const list = menu.candidates || [];
+                        const totalH = list.length * (btnH + gap) + 10;
+
+                        // 繪製背景
+                        drawRoundedRect(menu.x, menu.y, btnW, totalH, 5, 'rgba(0,0,0,0.95)');
+                        ctx.strokeStyle = '#3498db';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(menu.x, menu.y, btnW, totalH);
+
+                        list.forEach((s, i) => {
+                            const bx = menu.x + 5;
+                            const by = menu.y + 5 + i * (btnH + gap);
+
+                            // 按鈕背景
+                            ctx.fillStyle = '#2c3e50';
+                            ctx.fillRect(bx, by, btnW - 10, btnH);
+                            ctx.strokeStyle = '#7f8c8d';
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(bx, by, btnW - 10, btnH);
+
+                            // 文字資訊
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 12px "Microsoft JhengHei", Arial';
+                            ctx.textAlign = 'left';
+                            ctx.textBaseline = 'middle';
+
+                            // 顯示資訊
+                            const status = s.triageTag ? (s.triageTag === 'green' ? '輕傷' : s.triageTag === 'red' ? '重傷' : '已檢') : '未檢傷';
+                            ctx.fillText(`${i + 1}. ${s.data.sex} (${status})`, bx + 10, by + btnH / 2);
+
+                            // 顏色圓點
+                            const color = s.triageTag === 'green' ? '#2ecc71' :
+                                s.triageTag === 'yellow' ? '#f1c40f' :
+                                    s.triageTag === 'red' ? '#e74c3c' :
+                                        s.triageTag === 'black' ? '#2d3436' : '#95a5a6';
+                            ctx.beginPath();
+                            ctx.arc(bx + btnW - 20, by + btnH / 2, 6, 0, Math.PI * 2);
+                            ctx.fillStyle = color;
+                            ctx.fill();
+                        });
+                        return; // ★★★ 重要：繪製完畢直接返回，不執行後方的主選單繪製 ★★★
+                    }
                     const mx = menu.x - 40; const my = menu.y - 60;
                     ctx.strokeStyle = 'white'; ctx.lineWidth = 1;
                     // 修改: 若是治療選單，縮短連線以配合向上移動的選單
@@ -4597,7 +4764,7 @@
 
                     for (let i = state.npcGroups.length - 1; i >= 0; i--) {
                         let group = state.npcGroups[i];
-                        const speed = 1.0;
+                        const speed = 1.75;
                         if (group.state === 'searching') {
                             // 預防萬一：如果處於 searching 狀態但沒目標，直接撤離
                             group.state = 'leaving';
@@ -4702,7 +4869,7 @@
                                 }
                             } else {
                                 // 移動邏輯 (保持不變)
-                                const speed = 0.6;
+                                const speed = 1.2;
                                 group.leaderX += (dx / dist) * speed;
                                 group.leaderY += (dy / dist) * speed;
                                 if (group.target) {
@@ -5581,8 +5748,33 @@
                     const timeSeconds = Math.floor(gameState.current.frameCount / 60);
 
                     // 3. 治療正確率 (止血 + 呼吸道 合併計算)
-                    const treatTotal = statsTracker.current.tourniquet.total + statsTracker.current.airway.total;
-                    const treatCorrect = statsTracker.current.tourniquet.correct + statsTracker.current.airway.correct;
+                    // ★★★ 修改：不再使用 statsTracker，改為統計「已接觸」且「有需求」的傷患 ★★★
+
+                    let tTotal = 0, tCorrect = 0; // 止血帶
+                    let aTotal = 0, aCorrect = 0; // 呼吸道
+                    survivors.forEach(s => {
+                        // 關鍵判斷：必須是玩家有打開過選單的傷患 (hasInteracted)
+                        if (s.hasInteracted) {
+
+                            // 統計止血帶：針對原本有出血需求的
+                            if (s.data.needTourniquet) {
+                                tTotal++;
+                                // 分子：目前無出血 且 未死亡 (代表治療成功)
+                                if (!s.data.isBleeding && !s.isDead) tCorrect++;
+                            }
+
+                            // 統計呼吸道：針對原本無呼吸(且非明顯死亡)的
+                            if (s.data.needAirway) {
+                                aTotal++;
+                                // 分子：呼吸已恢復 (!= '無') 且 未死亡
+                                if (s.data.resp !== '無' && !s.isDead) aCorrect++;
+                            }
+                        }
+                    });
+
+                    // 合併計算
+                    const treatTotal = tTotal + aTotal;
+                    const treatCorrect = tCorrect + aCorrect;
 
                     setResultStats({
                         triage: triageStats,
@@ -5598,12 +5790,16 @@
                 if (total === 0) return "100%"; // 若無該類別傷患，視為滿分
                 return Math.round((correct / total) * 100) + "%";
             };
-            // ★★★ 遊戲流程控制 (Intro -> CharacterSelect -> Game) ★★★
+            // 遊戲流程控制 (Intro -> CharacterSelect -> Game) 
             // 如果遊戲還沒開始
             if (!gameStarted) {
-                // 如果處於「顯示人物選擇」階段
+                // ★★★ 傳遞 totalSurvivors 狀態與設定函式給組件 ★★★
                 if (showCharacterSelect) {
-                    return <CharacterSelection onSelect={handleCharacterSelect} />;
+                    return <CharacterSelection
+                        onSelect={handleCharacterSelect}
+                        totalSurvivors={totalSurvivors}
+                        setTotalSurvivors={setTotalSurvivors}
+                    />;
                 }
                 // 否則顯示開頭動畫 (動畫結束後觸發 setShowCharacterSelect)
                 return <IntroScreen onStart={() => setShowCharacterSelect(true)} />;
@@ -5636,7 +5832,11 @@
                                 <h1 className="text-5xl text-yellow-400 font-bold mb-2 tracking-widest drop-shadow-[0_0_20px_rgba(253,224,71,0.6)]" style={{ fontFamily: 'Impact, sans-serif' }}>
                                     MISSION COMPLETE
                                 </h1>
-                                <div className="text-gray-400 mb-6 text-sm">任務耗時: {Math.floor(resultStats.timeSeconds / 60)}分 {resultStats.timeSeconds % 60}秒</div>
+                                {/* ★★★ 顯示分數 (在時間旁邊) ★★★ */}
+                                <div className="flex gap-8 mb-6 text-gray-400 text-sm">
+                                    <div>任務耗時: {Math.floor(resultStats.timeSeconds / 60)}分 {resultStats.timeSeconds % 60}秒</div>
+                                    <div className="text-yellow-400 font-bold border-l border-gray-600 pl-8">總分: {score}</div>
+                                </div>
 
                                 <div className="grid grid-cols-2 gap-x-12 gap-y-6 w-full max-w-4xl">
                                     {/* 1. 檢傷正確率面板 */}
