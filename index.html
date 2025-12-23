@@ -1364,102 +1364,149 @@
                 }, 50);
             };
 
-            const generateSurvivorData = (isTrapped) => {
+           const generateSurvivorData = (isTrapped) => {
                 const sex = Math.random() > 0.5 ? '男' : '女';
                 const age = Math.floor(Math.random() * (70 - 12 + 1)) + 12;
+                
+                 // ：隨機選取工具函式 (語法：randomChoice([選項A, 選項B, 選項C...])) 
+                // 這行程式碼的意思是：從傳入的陣列中，隨機選出一個項目回傳
+                const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
+                // 先決定傷患的真實顏色 (Severity)
                 const severityRoll = Math.random();
                 let severity = 'green';
-                let consciousness = '清醒';
-                let resp = Math.random() > 0.5 ? '24次/min' : '12次/min';
-                let pulse = '橈動脈摸的到';
-                let injuryText = Math.random() > 0.5 ? '擦傷、驚嚇' : '臉部流血';
-                let isBleeding = false;
-                // 定義紅色傷患的呼吸速率選項 (32, 8, 24) 
-                const redRespOptions = ['32次/min', '8次/min', '24次/min'];
-
-                // 受困傷患強制設定為紅色或黑色 
+                
                 if (isTrapped) {
-                    if (Math.random() > 0.7) { // 30% 機率死亡(黑)
+                    if (Math.random() > 0.7) { 
                         severity = 'black';
-                        consciousness = '無意識';
-                        resp = '無';
-                        pulse = '無';
-                        injuryText = '嚴重擠壓變形、無生命徵象';
-                        isBleeding = false;
-                    } else { // 70% 機率重傷(紅)
-                        severity = 'red';
-                        // ★★★ 修改：受困紅色傷患中，80% 為無意識，呼吸/脈搏隨機 ★★★
-                        if (Math.random() < 0.8) {
-                            consciousness = '無意識';
-
-                            // 呼吸隨機 (包含正常與異常數值)
-                            const mixRespOptions = ['12次/min', '18次/min', '24次/min', '32次/min', '8次/min'];
-                            resp = mixRespOptions[Math.floor(Math.random() * mixRespOptions.length)];
-
-                            // 脈搏隨機 (包含正常與異常數值)
-                            const mixPulseOptions = ['橈動脈摸的到', 'CRT<2sec', '橈動脈摸不到', 'CRT>2秒'];
-                            pulse = mixPulseOptions[Math.floor(Math.random() * mixPulseOptions.length)];
-
-                            injuryText = '受困車內、頭部撞擊';
-                            isBleeding = Math.random() > 0.5; // 出血隨機
-                        } else {
-                            consciousness = Math.random() > 0.5 ? '無意識' : '對痛有反應';
-                            resp = redRespOptions[Math.floor(Math.random() * redRespOptions.length)];
-                            pulse = Math.random() > 0.5 ? '橈動脈摸不到' : 'CRT>2秒';
-                            injuryText = Math.random() > 0.5 ? '受困壓傷' : '雙腳變形';
-                            isBleeding = true;
-                        }
+                    } else { 
+                        severity = 'red'; 
                     }
                 } else {
-                    if (severityRoll > 0.9) {
-                        severity = 'black'; consciousness = '無意識'; resp = '無'; pulse = '無'; injuryText = '無呼吸';
-                        isBleeding = false;
-                    } else if (severityRoll > 0.75) {
-                        // 指定的紅色傷患資料 (>0.1=90%機率出現此特殊設定) 
-                        // 性別隨機(由上方sex決定), 無法行走, 呼吸18, 脈搏摸的到, 意識昏迷
-                        // ★★★ 修改：非受困紅色傷患，90% 機率為「無意識、呼吸脈搏隨機」 ★★★
-                        if (Math.random() > 0.1) {
-                            severity = 'red';
-                            // 意識固定無意識
-                            consciousness = '無意識';
-
-                            // 呼吸隨機 (包含正常與異常數值)
-                            const mixRespOptions = ['12次/min', '18次/min', '24次/min', '32次/min', '8次/min'];
-                            resp = mixRespOptions[Math.floor(Math.random() * mixRespOptions.length)];
-
-                            // 脈搏隨機 (包含正常與異常數值)
-                            const mixPulseOptions = ['橈動脈摸的到', 'CRT<2sec', '橈動脈摸不到', 'CRT>2秒'];
-                            pulse = mixPulseOptions[Math.floor(Math.random() * mixPulseOptions.length)];
-
-                            injuryText = '臉色蒼白、多處撕裂傷';
-                            isBleeding = Math.random() > 0.5; // 出血隨機
-                        } else {
-                            // ★★★ 新增/替換：類型 B (取代原本的舊代碼) ★★★
-                            // 設定：[性別:隨機][呼吸:隨機][脈搏:橈動脈摸不到 或 CRT>2秒][意識:隨機]
-                            severity = 'red';
-
-                            // 意識隨機
-                            const consList = ['清醒', '對聲音有反應', '對痛有反應', '無意識', '昏迷無反應'];
-                            consciousness = consList[Math.floor(Math.random() * consList.length)];
-
-                            // 呼吸隨機
-                            const respList = ['12次/min', '18次/min', '20次/min', '24次/min', '32次/min', '8次/min'];
-                            resp = respList[Math.floor(Math.random() * respList.length)];
-
-                            // 脈搏: 固定為異常 (符合紅卡標準)
-                            pulse = Math.random() > 0.5 ? '橈動脈摸不到' : 'CRT>2秒';
-
-                            injuryText = Math.random() > 0.5 ? '臉色蒼白、冒冷汗' : '肢體末端冰冷';
-                            isBleeding = Math.random() > 0.3;
-                        }
-                    } else if (severityRoll > 0.50) {
-                        severity = 'yellow'; consciousness = Math.random() > 0.5 ? '對聲音有反應' : '可以聽指令'; resp = Math.random() > 0.5 ? '18次/分' : '24次/分'; pulse = Math.random() > 0.5 ? 'CRT<2sec' : '橈動脈摸的到'; injuryText = Math.random() > 0.5 ? '骨折、無法行走' : '頭暈、嘔吐無法行走';
-                        isBleeding = false;
-                    } else {
-                        isBleeding = false;
-                    }
+                    if (severityRoll > 0.9) severity = 'black';
+                    else if (severityRoll > 0.75) severity = 'red';
+                    else if (severityRoll > 0.50) severity = 'yellow';
+                    else severity = 'green';
                 }
+
+                let consciousness = '清醒';
+                let resp = '18次/min';
+                let pulse = '橈動脈摸的到';
+                let injuryText = '';
+                let isBleeding = false;
+                // 明顯死亡標記 (預設 false) 
+                let isObviousDeath = false;
+
+                // 根據等級產生對應的生理數值 (Vitals)
+                if (severity === 'black') {
+                    consciousness = '無意識';
+                    resp = '無';
+                    pulse = '無';
+                    // ★★★ 修改：黑色傷患分為「明顯死亡」與「一般OHCA」 ★★★
+                    // 明顯死亡：腦漿溢出、臟器外露 (絕對救不回來)
+                    // 一般OHCA：可能透過暢通呼吸道恢復
+                    if (Math.random() > 0.8) { // 20% 機率為明顯死亡
+                         isObviousDeath = true;
+                  // 使用 randomChoice 設定多種隨機傷情 
+                         injuryText = randomChoice([
+                             '頭部破裂、腦漿溢出', 
+                             '腹部撕裂、臟器外露', 
+                             '身體斷成兩截', 
+                             '頭部重創、變形'
+                         ]);
+                    } else {
+                         isObviousDeath = false;
+                         injuryText = '臉色發紫';
+                    }
+                    isBleeding = false;
+                } else if (severity === 'red') {
+                    // ★★★ 紅色患者 6 種隨機傷情卡 (符合 START 紅色危急標準) ★★★
+                    // START 標準: 呼吸 > 30 或 < 10, 無脈搏/CRT>2s, 或 無法聽從指令(意識不清)
+                    // 紅色患者維持原有的 Switch 邏輯 (因為紅卡通常綁定特定生理數值組合)
+                    // 想在某個 Case 裡隨機也可以用 randomChoice
+                    const redType = Math.floor(Math.random() * 6) + 1; // 產生 1~6 的隨機數
+                    
+                    switch (redType) {
+                        case 1: // 紅1：呼吸急促 (>30)
+                            resp = '32次/min';
+                            pulse = '橈動脈摸的到';
+                            consciousness = Math.random() > 0.5 ? '清醒' : '對聲音有反應';
+                            injuryText = '胸部創傷、呼吸急促';
+                            isBleeding = Math.random() > 0.5;
+                            break;
+                        case 2: // 紅2：呼吸過慢 (<10)
+                            resp = '8次/min';
+                            pulse = '橈動脈摸的到';
+                            consciousness = Math.random() > 0.5 ? '對痛有反應' : '無意識';
+                            injuryText = '頭部重創、呼吸微弱';
+                            isBleeding = Math.random() > 0.5;
+                            break;
+                        case 3: // 紅3：無脈搏 (休克)
+                            resp = '24次/min';
+                            pulse = '橈動脈摸不到';
+                            consciousness = Math.random() > 0.5 ? '對聲音有反應' : '無意識';
+                            injuryText = '大量出血、臉色蒼白';
+                            isBleeding = true; // 此類型強制出血
+                            break;
+                        case 4: // 紅4：循環不良 (CRT>2秒)
+                            resp = '20次/min';
+                            pulse = 'CRT>2秒';
+                            consciousness = Math.random() > 0.5 ? '對痛有反應' : '無意識';
+                            injuryText = '肢體冰冷、末梢發紫';
+                            isBleeding = Math.random() > 0.5;
+                            break;
+                        case 5: // 紅5：意識昏迷
+                            resp = '18次/min';
+                            pulse = '橈動脈摸的到';
+                            consciousness = '無意識';
+                            injuryText = '頭部撞擊、昏迷';
+                            isBleeding = Math.random() > 0.3;
+                            break;
+                        case 6: // 紅6：意識混亂 (無法聽從指令)
+                            resp = '22次/min';
+                            pulse = '橈動脈摸的到';
+                            consciousness = '無法聽指令';
+                            injuryText = '語無倫次、眼神渙散';
+                            isBleeding = Math.random() > 0.3;
+                            break;
+                    }
+                } else if (severity === 'yellow') {
+                     // ★★★ 2. ：使用 randomChoice 設定 3 種以上的隨機項目 ★★★
+                     consciousness = '可以聽指令';
+                     
+                     // 設定隨機呼吸 (範例：4種)
+                     resp = randomChoice(['18次/min', '20次/min', '22次/min', '24次/min']);
+                     
+                     // 設定隨機脈搏 (範例：3種)
+                     pulse = randomChoice(['CRT<2sec', '橈動脈摸的到', '脈搏強且規律']);
+                     
+                     // 設定隨機傷情 (範例：5種)
+                     injuryText = randomChoice([
+                         '大腿骨折、無法行走', 
+                         '小腿變形、劇烈疼痛', 
+                         '腹部疼痛、無法站立', 
+                         '腳踝嚴重扭傷', 
+                         '背部挫傷、移動困難'
+                     ]);
+                     isBleeding = false;
+                } else { 
+                      // 綠色：可行走
+                     severity = 'green'; 
+                     consciousness = '清醒'; 
+                     resp = '18次/min';
+                     pulse = '橈動脈摸的到';
+                     
+                     // ★★★ 3. ：綠色傷患隨機傷情 (範例：4種) ★★★
+                     injuryText = randomChoice([
+                         '手部擦傷、驚嚇', 
+                         '臉部輕微割傷', 
+                         '手臂瘀青、疼痛', 
+                         '輕微腦震盪、頭暈'
+                     ]);
+                     isBleeding = false;
+                }
+
+
 
                 const clothColor = `hsl(${Math.random() * 360}, 40%, 60%)`;
                 // ★★★ 隨機設定是否被汙染 (例如 30% 機率) ★★★
@@ -4733,10 +4780,10 @@
                                 s.tourniquetTimer = 0;
                                 s.isDead = true;
                                 //s.triageTag = 'black';
-                                s.data.consciousness = '無意識';
+                                s.data.consciousness = '膚色蒼白';
                                 s.data.resp = '無';
                                 s.data.pulse = '無';
-                                s.data.injuryText = '失血過多死亡';
+                                s.data.injuryText = '地上有一灘血';
                                 s.data.severity = 'black';
                                 addFeedback(s.x, s.y, "傷患死亡", "#000");
                                 checkTriageCounts(); // 傷患死亡轉黑卡後檢查計數
