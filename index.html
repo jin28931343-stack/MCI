@@ -5076,6 +5076,10 @@
                     });
 
                     const isTryingToMove = state.keys.w || state.keys.s || state.keys.a || state.keys.d;
+                    // 當偵測到鍵盤移動時，立即取消滑鼠點擊的目標，防止放開按鍵後角色自己跑走 
+                    if (isTryingToMove) {
+                        p.movingToTarget = false;
+                    }
                     let speed = p.speed;
 
                     // 定義「正在移動」的狀態 (包含 鍵盤、滑鼠導航、虛擬搖桿) ★★★
@@ -6811,5 +6815,6 @@
 </body>
 
 </html>
+
 
 
