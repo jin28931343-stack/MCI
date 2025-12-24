@@ -1763,9 +1763,9 @@
 
                 // --- 重置 ---
                 state.isGameOver = false;
-                  //重置按鍵與玩家忙碌狀態，解決移動失效問題 
+                //重置按鍵與玩家忙碌狀態，解決移動失效問題 
                 state.keys = { w: false, s: false, a: false, d: false };
-                state.player.isBusy = false; 
+                state.player.isBusy = false;
                 state.player.moving = false;
                 state.player.movingToTarget = false;
                 state.obstacles = [];
@@ -3423,11 +3423,12 @@
 
                 const drawEmergencyVehicle = (v) => {
                     ctx.save(); ctx.translate(v.x + v.w / 2, v.y + v.h / 2); ctx.rotate(v.angle);
-                    // ★★★ 加入此判斷：只有非平板才開陰影 ★★★
-                    if (!isMobile) {
-                        ctx.shadowColor = 'rgba(0,0,0,0.4)';
-                        ctx.shadowBlur = 10;
-                    }
+
+                    // ★★★ 優化：手動繪製陰影 (向右下偏移 4px 的半透明圓角矩形) ★★★
+                    // 這比 ctx.shadowBlur 快非常多
+                    drawRoundedRect(-v.w / 2 + 4, -v.h / 2 + 4, v.w, v.h, 6, 'rgba(0,0,0,0)');
+
+
                     if (v.type === 'firetruck') {
                         // ★★★ 若有消防車圖片則繪製圖片，否則繪製原本的向量圖 ★★★
                         const ftImg = assets.firetruck;
@@ -4329,39 +4330,41 @@
                     });
                 };
 
-                // ★★★ 新增：繪製互動提示箭頭 (與設置區域風格一致) ★★
+                // 3. 優化 drawPlacementPreview：移除 shadowBlur
                 const drawPlacementPreview = (mode) => {
                     if (!mode.active) return;
                     const p = state.player;
 
                     ctx.save();
 
-                    // 1. 計算座標
                     const cx = p.x;
                     const cy = p.y - 50;
                     const bounce = Math.sin(state.frameCount * 0.2) * 5;
                     const arrowY = cy + bounce;
 
-                    // 2. 繪製箭頭
+                    // 1. 手繪陰影箭頭
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.beginPath();
+                    ctx.moveTo(cx - 10 + 2, arrowY - 15 + 2);
+                    ctx.lineTo(cx + 10 + 2, arrowY - 15 + 2);
+                    ctx.lineTo(cx + 2, arrowY + 2);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // 2. 箭頭本體
                     ctx.fillStyle = '#f1c40f';
                     ctx.beginPath();
                     ctx.moveTo(cx - 10, arrowY - 15);
                     ctx.lineTo(cx + 10, arrowY - 15);
                     ctx.lineTo(cx, arrowY);
                     ctx.closePath();
-                    if (!isMobile) {
-                        ctx.shadowColor = 'black';
-                        ctx.shadowBlur = 4;
-                    }
                     ctx.fill();
                     ctx.strokeStyle = 'black'; ctx.lineWidth = 1; ctx.stroke();
-                    ctx.shadowBlur = 0;
 
-                    // 3. 定義文字位置變數 (確保在同一區塊定義)
                     const promptText = "按 [E] 設置 或 [點擊左鍵]";
                     const promptY = arrowY - 20;
 
-                    // 4. 繪製操作提示
+                    // 3. 文字描邊
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'bottom';
                     ctx.lineWidth = 3;
@@ -4371,13 +4374,12 @@
                     ctx.fillStyle = '#ffffff';
                     ctx.fillText(promptText, cx, promptY);
 
-                    // 5. 繪製區域名稱
                     const labels = {
                         'green': '輕傷區', 'yellow': '中傷區', 'red': '重傷區', 'black': '臨時停屍間',
                         'command_post': '指揮站', 'ambulance_staging': '救護車待命區', 'decon': '除汙區'
                     };
-                    const labelText = labels[mode.color] || ''; // 防止 undefined
-                    const labelY = promptY - 20; // 確保使用正確的 promptY
+                    const labelText = labels[mode.color] || '';
+                    const labelY = promptY - 20;
 
                     const labelColors = {
                         'green': '#2ecc71', 'yellow': '#f1c40f', 'red': '#e74c3c', 'black': '#bdc3c7',
@@ -4405,7 +4407,17 @@
                         const bounce = Math.sin(state.frameCount * 0.2) * 5; // 上下浮動
                         const arrowY = y - 40 + bounce; // 顯示在物件上方
 
-                        // 1. 繪製箭頭
+                        // 1. 繪製手繪陰影 (黑色半透明，稍微偏移)
+                        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                        ctx.beginPath();
+                        // 偏移量 (+2, +2)
+                        ctx.moveTo(x - 10 + 2, arrowY - 15 + 2);
+                        ctx.lineTo(x + 10 + 2, arrowY - 15 + 2);
+                        ctx.lineTo(x + 2, arrowY + 2);
+                        ctx.closePath();
+                        ctx.fill();
+
+                        // 2. 繪製箭頭本體
                         ctx.fillStyle = '#f1c40f';
                         ctx.beginPath();
                         ctx.moveTo(x - 10, arrowY - 15);
@@ -4413,25 +4425,18 @@
                         ctx.lineTo(x, arrowY);
                         ctx.closePath();
 
-                        // ★★★ 優化：平板關閉陰影 ★★★
-                        if (!isMobile) {
-                            ctx.shadowColor = 'black';
-                            ctx.shadowBlur = 4;
-                        }
                         ctx.fill();
                         ctx.strokeStyle = 'black'; ctx.lineWidth = 1; ctx.stroke();
-                        ctx.shadowBlur = 0;
 
-                        // 2. 繪製文字
+                        // 3. 繪製文字 (使用 strokeText 描邊代替 shadowBlur)
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'bottom';
-                        ctx.lineWidth = 3;
-                        ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-
                         const promptText = "按 [E] 互動 或 [點擊左鍵]";
                         const promptY = arrowY - 20;
 
                         // 操作提示
+                        ctx.lineWidth = 3;
+                        ctx.strokeStyle = 'rgba(0,0,0,0.8)'; // 黑色描邊
                         ctx.font = 'bold 12px "Segoe UI"';
                         ctx.strokeText(promptText, x, promptY);
                         ctx.fillStyle = '#ffffff';
