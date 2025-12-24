@@ -5086,7 +5086,7 @@
                     if (isPlayerMoving) {
                         // ★★★ 修改：若有 SP Buff (spBuffTimer > 0) 則不扣 SP ★★★
                         if (state.spBuffTimer <= 0) {
-                            state.stats.sp = Math.max(0, state.stats.sp - 0.2);
+                            state.stats.sp = Math.max(0, state.stats.sp - 0.05);
                         } else {
                             // Buff 期間 SP 維持全滿或緩慢恢復
                             state.stats.sp = Math.min(state.stats.maxSp, state.stats.sp + 1);
@@ -6811,4 +6811,5 @@
 </body>
 
 </html>
+
 
