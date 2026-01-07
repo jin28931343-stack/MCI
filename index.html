@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>網站轉移通知</title>
+    <meta http-equiv="refresh" content="10;url=https://triage-simulator-50ed6.web.app/">
+    <style>
+        body {
+            /* 使用提供的圖片作為背景 */
+            background-image: url('PIC/MCI_game');
+            /* 讓背景圖片覆蓋整個頁面 */
+            background-size: cover;
+            /* 圖片置中 */
+            background-position: center;
+            /* 背景不重複 */
+            background-repeat: no-repeat;
+            /* 設定高度為視窗高度，確保背景填滿 */
+            height: 100vh;
+            /* 使用 Flexbox 讓內容垂直和水平置中 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* 設定文字顏色為白色，以便在深色背景上閱讀 */
+            color: white;
+            /* 使用無襯線字體 */
+            font-family: sans-serif;
+            /* 移除預設邊距 */
+            margin: 0;
+        }
+
+        .message-box {
+            /* 設定訊息框的背景為半透明黑色，讓文字更清晰 */
+            background-color: rgba(0, 0, 0, 0.7);
+            /* 增加內距 */
+            padding: 30px;
+            /* 設定圓角 */
+            border-radius: 10px;
+            /* 文字置中 */
+            text-align: center;
+        }
+
+        .message-box h1 {
+            /*標題樣式*/
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        .message-box p {
+            /*段落樣式*/
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+        
+        .message-box a {
+            /*連結樣式*/
+            color: #00BFFF; /* 使用亮藍色 */
+            text-decoration: none;
+            font-weight: bold;
+        }
+        
+        .message-box a:hover {
+            /*連結滑鼠懸停樣式*/
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="message-box">
+        <h1>網站已搬家</h1>
+        <p>本頁面將在 10 秒後自動跳轉至新網址。</p>
+        <p>如果沒有自動跳轉，請點擊下方連結：<br>
+           <a href="https://triage-simulator-50ed6.web.app/">https://triage-simulator-50ed6.web.app/</a>
+        </p>
+    </div>
+</body>
+</html>
